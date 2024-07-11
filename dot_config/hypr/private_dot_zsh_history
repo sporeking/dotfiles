@@ -1,0 +1,18 @@
+vim hyprland.conf
+cd ../../Downloads
+ls
+nvim hyprland.conf
+nvim hyprland.conf
+hyprctl reload
+nvim hyprland.conf
+nvim hyprland.conf
+poweroff
+ls
+nvim hyprland.conf
+nvim hyprland.conf
+nvim hyprland.conf
+lsmod
+lsmod | grep uinput
+echo 'KERNEL=="uinput", GROUP="input", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/99-input.rules
+nvim hyprland.conf
+reboot

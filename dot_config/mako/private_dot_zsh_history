@@ -1,0 +1,7 @@
+: 1720376312:0;ls
+: 1720376315:0;nvim config
+: 1720376335:0;makoctl reload
+: 1720376351:0;notify-send 'Hello world!' 'This is an example notification.' -u normal
+: 1720376410:0;sudo pacman -R starship
+: 1720376456:0;sudo pacman -R starship
+: 1720376477:0;bash
