@@ -2,7 +2,7 @@
     border: none;
     border-radius: 0px;
     /*font-family: VictorMono, Iosevka Nerd Font, Noto Sans CJK;*/
-    font-family: Iosevka, FontAwesome, Noto Sans CJK;
+    font-family: MV Boli, Lucida Sans Unicode, Comic Sans MS, FiraCode;/*, Iosevka, FontAwesome, Noto Sans CJK;*/
     font-size: 13px;
     font-style: normal;
     min-height: 0;
@@ -11,7 +11,7 @@
 window#waybar {
     background: rgba(30, 30, 46, 0.5);
     border-bottom: 1px solid #282828;
-    color: #f4d9e1
+    color: #f4d9e1;
 }
 
 #workspaces {
@@ -69,9 +69,8 @@ window#waybar {
 }
 
 #tray {
-    background: #282828;
-    margin: 5px 5px 5px 5px;
-    border-radius: 16px;
+    /* background: #282828; */
+    margin: 5px 3px 5px 3px;
     padding: 0px 5px;
     /*border-right: solid 1px #282738;*/
 }
@@ -100,6 +99,8 @@ window#waybar {
     margin: 5px;
     margin-left: 3px;
     margin-right: 0px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     padding: 0px 12px 0px 8px;
     font-weight: bold;
 }
@@ -121,6 +122,8 @@ window#waybar {
     margin: 5px;
     margin-left: 0px;
     margin-right: 0px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     padding: 0px 0px;
     padding-left: 10px;
     padding-right: 10px;
@@ -210,6 +213,7 @@ window#waybar {
     margin-bottom: 5px;
     font-weight: bold;
     font-style: normal;
+    font-size: 18;
 }
 
 #custom-wf-recorder {
@@ -236,6 +240,8 @@ window#waybar {
     margin: 5px;
     margin-left: 3px;
     margin-right: 3px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     padding: 0px 10px 0px 10px;
     font-weight: bold;
 }

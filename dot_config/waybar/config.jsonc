@@ -17,13 +17,13 @@
         //"custom/media"
     ],
     "modules-center": [
-        //"sway/window"
 	"hyprland/workspaces"
+        //"sway/window"
     ],
     "modules-right": [
         // "mpd",
         // "idle_inhibitor",
-	"tray",
+	      "tray",
         "pulseaudio",
         "network",
         "power-profiles-daemon",
@@ -223,8 +223,10 @@
         "format-source-muted": "",
         "format-icons": {
             "headphone": "",
-            "hands-free": "",
-            "headset": "",
+            "hands-free": "",
+            "headset": "",
+            // "hands-free": "",
+            // "headset": "",
             "phone": "",
             "portable": "",
             "car": "",
