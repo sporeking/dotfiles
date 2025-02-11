@@ -1,0 +1,125 @@
+{
+  "bar.customModules.updates.pollingInterval": 1440000,
+  "theme.font.name": "FiraCode Nerd Font Mono, WenQuanYi Zen Hei",
+  "theme.font.style": "italic, ",
+  "theme.font.label": "FiraCode Nerd Font Mono Italic, WenQuanYi Zen Hei",
+  "menus.transition": "crossfade",
+  "scalingPriority": "hyprland",
+  "theme.bar.floating": false,
+  "theme.bar.buttons.workspaces.enableBorder": false,
+  "bar.workspaces.monitorSpecific": false,
+  "bar.workspaces.show_icons": false,
+  "bar.workspaces.show_numbered": false,
+  "bar.workspaces.showWsIcons": true,
+  "bar.workspaces.showApplicationIcons": true,
+  "bar.scrollSpeed": 7,
+  "theme.bar.buttons.enableBorders": false,
+  "theme.bar.buttons.radius": "0.6em",
+  "theme.bar.layer": "top",
+  "theme.bar.scaling": 80,
+  "menus.clock.time.military": false,
+  "menus.clock.time.hideSeconds": true,
+  "menus.dashboard.shortcuts.left.shortcut1.command": "microsoft-edge-dev",
+  "menus.dashboard.shortcuts.right.shortcut3.command": "hyprshot -m region --clipboard-only",
+  "bar.customModules.cpuTemp.unit": "metric",
+  "bar.bluetooth.label": false,
+  "bar.systray.ignore": [],
+  "bar.clock.showTime": true,
+  "bar.clock.format": "%a %b %d %I:%M %p",
+  "theme.bar.buttons.bluetooth.spacing": "0em",
+  "theme.bar.transparent": false,
+  "theme.bar.opacity": 50,
+  "tear": false,
+  "menus.media.hideAlbum": false,
+  "menus.media.displayTime": false,
+  "menus.transitionTime": 125,
+  "menus.clock.weather.location": "Chifeng",
+  "menus.clock.weather.key": "158a912e9e934175af624514252701",
+  "menus.clock.weather.unit": "metric",
+  "theme.font.weight": 400,
+  "theme.font.size": "1.3rem",
+  "theme.bar.menus.menu.dashboard.confirmation_scaling": 90,
+  "theme.bar.menus.menu.media.scaling": 100,
+  "bar.layouts": {
+    "0": {
+      "left": [
+        "dashboard",
+        "windowtitle",
+        "media"
+      ],
+      "middle": [
+        "workspaces"
+      ],
+      "right": [
+        "volume",
+        "network",
+        "bluetooth",
+        "battery",
+        "systray",
+        "clock",
+        "notifications"
+      ]
+    },
+    "1": {
+      "left": [
+        "dashboard",
+        "workspaces",
+        "windowtitle"
+      ],
+      "middle": [
+        "media"
+      ],
+      "right": [
+        "volume",
+        "clock",
+        "notifications"
+      ]
+    },
+    "2": {
+      "left": [
+        "dashboard",
+        "workspaces",
+        "windowtitle"
+      ],
+      "middle": [
+        "media"
+      ],
+      "right": [
+        "volume",
+        "clock",
+        "notifications"
+      ]
+    }
+  },
+  "bar.workspaces.applicationIconOncePerWorkspace": true,
+  "bar.workspaces.showAllActive": false,
+  "bar.workspaces.applicationIconEmptyWorkspace": "",
+  "bar.customModules.cpuTemp.sensor": "/sys/devices/platform/coretemp.0/hwmon/hwmon7/temp1_input",
+  "theme.bar.buttons.opacity": 100,
+  "theme.bar.buttons.background_opacity": 70,
+  "theme.bar.buttons.workspaces.background": "#242438",
+  "menus.dashboard.shortcuts.left.shortcut2.tooltip": "VSCode",
+  "menus.dashboard.shortcuts.left.shortcut2.command": "code",
+  "menus.dashboard.shortcuts.left.shortcut2.icon": "",
+  "notifications.ignore": [
+    "QQ"
+  ],
+  "menus.dashboard.directories.left.directory1.command": "sigma-file-manager",
+  "menus.dashboard.directories.left.directory1.label": "󰉍 Files",
+  "menus.dashboard.directories.left.directory2.command": "linuxqq",
+  "menus.dashboard.directories.left.directory2.label": " QQ",
+  "menus.dashboard.directories.left.directory3.command": "wechat-universal",
+  "menus.dashboard.directories.left.directory3.label": " Wechat",
+  "menus.dashboard.directories.right.directory1.command": "yesplaymusic",
+  "menus.dashboard.directories.right.directory1.label": " YesPlayMusic",
+  "menus.dashboard.directories.right.directory2.command": "steam",
+  "menus.dashboard.directories.right.directory2.label": " Steam",
+  "menus.dashboard.directories.right.directory3.command": "wps",
+  "menus.dashboard.directories.right.directory3.label": "󰏆 WPS",
+  "menus.dashboard.shortcuts.left.shortcut3.tooltip": "Kitty",
+  "menus.dashboard.shortcuts.left.shortcut3.command": "kitty",
+  "menus.dashboard.shortcuts.left.shortcut3.icon": "",
+  "bar.network.truncation_size": 7,
+  "bar.workspaces.workspaceMask": false,
+  "bar.launcher.rightClick": "rofi -combi-modi drun -show combi -icon-theme 'Papirus' -show-icons -run-shell-command '{terminal} -e zsh -ic '{cmd} && read''"
+}

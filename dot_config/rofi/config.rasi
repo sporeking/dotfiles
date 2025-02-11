@@ -1,0 +1,13 @@
+configuration {
+  modes: [ combi, run, ssh ];
+  combi-modes: [ window, drun, run ];
+  mouse: true;
+}
+
+//@theme "gruvbox-light"
+ 
+/* Insert theme modifications after this */
+
+//@theme "/usr/share/rofi/themes/gruvbox-light-hard.rasi"
+
+@theme "/usr/share/rofi/themes/fancy2.rasi"
