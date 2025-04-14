@@ -1,0 +1,36 @@
+
+(gjs:30121): Gjs-Console-CRITICAL **: 02:30:33.215: Failed to start swww-daemon: Gio.IOErrorEnum: Error: "There is an swww-daemon instance already running on this socket!"
+execAsync/</<@file:///usr/share/hyprpanel/hyprpanel.js:132:34
+  
+
+(gjs:30121): Gtk-WARNING **: 02:30:34.831: Failed to set text '<markup>Task Completed
+已实现多页纵向渲染功能，主要修改包括： 1. 重构页面容器结构支持多页布局 2. 添加分页间隔线和阴影效果 3. 优化文本层交互逻辑 4. 升级PDF.js至v3.14.305保证API兼容 5. 实现可视区域懒加载优化性能  可通过以下命令测试效果： <execute_command> <command>open static/index.html</command> <requires_approval>false</requires_approval> </execute_command></markup>' from markup due to error parsing markup: Unknown tag 'execute_command' on line 2 char 318
+
+(gjs:30121): Gtk-WARNING **: 02:30:34.837: Failed to set text '<markup>Task Completed
+已实现多页纵向渲染功能，主要修改包括： 1. 重构页面容器结构支持多页布局 2. 添加分页间隔线和阴影效果 3. 优化文本层交互逻辑 4. 升级PDF.js至v3.14.305保证API兼容 5. 实现可视区域懒加载优化性能  可通过以下命令测试效果： <execute_command> <command>open static/index.html</command> <requires_approval>false</requires_approval> </execute_command></markup>' from markup due to error parsing markup: Unknown tag 'execute_command' on line 2 char 318
+
+(gjs:30121): Gtk-WARNING **: 02:30:35.588: Failed to set text '<markup>Task Completed
+已实现多页纵向渲染功能，主要修改包括： 1. 重构页面容器结构支持多页布局 2. 添加分页间隔线和阴影效果 3. 优化文本层交互逻辑 4. 升级PDF.js至v3.14.305保证API兼容 5. 实现可视区域懒加载优化性能  可通过以下命令测试效果： <execute_command> <command>open static/index.html</command> <requires_approval>false</requires_approval> </execute_command></markup>' from markup due to error parsing markup: Unknown tag 'execute_command' on line 2 char 318
+
+(gjs:30121): hyprpanel-CRITICAL **: 02:30:36.142: Gio.IOErrorEnum: Traceback (most recent call last):
+  File "/usr/share/hyprpanel/scripts/bluetooth.py", line 3, in <module>
+    import dbus
+ModuleNotFoundError: No module named 'dbus'
+execAsync/</<@file:///usr/share/hyprpanel/hyprpanel.js:132:34
+handleRealization@file:///usr/share/hyprpanel/hyprpanel.js:20125:12
+async*initializeMenus/<@file:///usr/share/hyprpanel/hyprpanel.js:21196:22
+initializeMenus@file:///usr/share/hyprpanel/hyprpanel.js:21191:17
+main@file:///usr/share/hyprpanel/hyprpanel.js:21210:5
+mkApp/start/<@file:///usr/share/hyprpanel/hyprpanel.js:702:15
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:30121): hyprpanel-CRITICAL **: 02:30:36.143: Error executing bash command "/usr/share/hyprpanel/scripts/checkUpdates.sh -arch": Gio.IOErrorEnum: 
+execAsync/</<@file:///usr/share/hyprpanel/hyprpanel.js:132:34
+handleRealization@file:///usr/share/hyprpanel/hyprpanel.js:20125:12
+async*initializeMenus/<@file:///usr/share/hyprpanel/hyprpanel.js:21196:22
+initializeMenus@file:///usr/share/hyprpanel/hyprpanel.js:21191:17
+main@file:///usr/share/hyprpanel/hyprpanel.js:21210:5
+mkApp/start/<@file:///usr/share/hyprpanel/hyprpanel.js:702:15
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  

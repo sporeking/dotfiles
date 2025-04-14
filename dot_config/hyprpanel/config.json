@@ -1,8 +1,7 @@
 {
   "bar.customModules.updates.pollingInterval": 1440000,
-  "theme.font.name": "FiraCode Nerd Font Mono, WenQuanYi Zen Hei",
-  "theme.font.style": "italic, ",
-  "theme.font.label": "FiraCode Nerd Font Mono Italic, WenQuanYi Zen Hei",
+  "theme.font.name": "FiraCode Nerd Font Mono",
+  "theme.font.label": "FiraCode Nerd Font Mono Italic",
   "menus.transition": "crossfade",
   "scalingPriority": "hyprland",
   "theme.bar.floating": false,
@@ -19,7 +18,7 @@
   "theme.bar.scaling": 80,
   "menus.clock.time.military": false,
   "menus.clock.time.hideSeconds": true,
-  "menus.dashboard.shortcuts.left.shortcut1.command": "microsoft-edge-dev",
+  "menus.dashboard.shortcuts.left.shortcut1.command": "/usr/bin/microsoft-edge-stable %U --enable-features=UseOzonePlatform --ozone-platform=wayland --enable-wayland-ime --disable-gpu --use-gl=desktop\n",
   "menus.dashboard.shortcuts.right.shortcut3.command": "hyprshot -m region --clipboard-only",
   "bar.customModules.cpuTemp.unit": "metric",
   "bar.bluetooth.label": false,
@@ -29,23 +28,26 @@
   "theme.bar.buttons.bluetooth.spacing": "0em",
   "theme.bar.transparent": false,
   "theme.bar.opacity": 50,
-  "tear": false,
+  "tear": true,
   "menus.media.hideAlbum": false,
   "menus.media.displayTime": false,
   "menus.transitionTime": 125,
-  "menus.clock.weather.location": "Chifeng",
+  "menus.clock.weather.location": "Suzhou",
   "menus.clock.weather.key": "158a912e9e934175af624514252701",
   "menus.clock.weather.unit": "metric",
-  "theme.font.weight": 400,
+  "theme.font.weight": 700,
   "theme.font.size": "1.3rem",
-  "theme.bar.menus.menu.dashboard.confirmation_scaling": 90,
+  "theme.bar.menus.menu.dashboard.confirmation_scaling": 60,
   "theme.bar.menus.menu.media.scaling": 100,
   "bar.layouts": {
     "0": {
       "left": [
         "dashboard",
-        "windowtitle",
-        "media"
+        "cava",
+        "hyprsunset",
+        "updates",
+        "media",
+        "windowtitle"
       ],
       "middle": [
         "workspaces"
@@ -55,6 +57,9 @@
         "network",
         "bluetooth",
         "battery",
+        "ram",
+        "cpu",
+        "cputemp",
         "systray",
         "clock",
         "notifications"
@@ -92,7 +97,7 @@
     }
   },
   "bar.workspaces.applicationIconOncePerWorkspace": true,
-  "bar.workspaces.showAllActive": false,
+  "bar.workspaces.showAllActive": true,
   "bar.workspaces.applicationIconEmptyWorkspace": "",
   "bar.customModules.cpuTemp.sensor": "/sys/devices/platform/coretemp.0/hwmon/hwmon7/temp1_input",
   "theme.bar.buttons.opacity": 100,
@@ -108,7 +113,7 @@
   "menus.dashboard.directories.left.directory1.label": "󰉍 Files",
   "menus.dashboard.directories.left.directory2.command": "linuxqq",
   "menus.dashboard.directories.left.directory2.label": " QQ",
-  "menus.dashboard.directories.left.directory3.command": "wechat-universal",
+  "menus.dashboard.directories.left.directory3.command": "wechat.sh",
   "menus.dashboard.directories.left.directory3.label": " Wechat",
   "menus.dashboard.directories.right.directory1.command": "yesplaymusic",
   "menus.dashboard.directories.right.directory1.label": " YesPlayMusic",
@@ -119,7 +124,21 @@
   "menus.dashboard.shortcuts.left.shortcut3.tooltip": "Kitty",
   "menus.dashboard.shortcuts.left.shortcut3.command": "kitty",
   "menus.dashboard.shortcuts.left.shortcut3.icon": "",
-  "bar.network.truncation_size": 7,
+  "bar.network.truncation_size": 9,
   "bar.workspaces.workspaceMask": false,
-  "bar.launcher.rightClick": "rofi -combi-modi drun -show combi -icon-theme 'Papirus' -show-icons -run-shell-command '{terminal} -e zsh -ic '{cmd} && read''"
+  "bar.launcher.rightClick": "rofi -combi-modi drun -show combi -icon-theme 'Papirus' -show-icons -run-shell-command '{terminal} -e zsh -ic '{cmd} && read''",
+  "theme.bar.menus.menu.network.scaling": 95,
+  "theme.bar.menus.monochrome": false,
+  "bar.workspaces.numbered_active_indicator": "underline",
+  "theme.bar.buttons.workspaces.smartHighlight": true,
+  "theme.osd.scaling": 75,
+  "bar.workspaces.applicationIconMap": {
+    "CherryStudio": "",
+    "yesplaymusic": "󰎄",
+    "zotero": ""
+  },
+  "theme.font.style": "italic",
+  "bar.workspaces.workspaces": 6,
+  "theme.bar.buttons.battery.text": "#dc8add",
+  "theme.bar.buttons.battery.icon": "#dc8add"
 }
