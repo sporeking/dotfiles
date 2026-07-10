@@ -1,104 +1,42 @@
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block; everything else may go below.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
-
+# zmodload zsh/zprof use to test the speed of zsh init.
+eval $(keychain --quiet --eval id_rsa ) > /dev/null
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
-export PATH=$PATH:$HOME/.local/share/gem/ruby/3.3.0/bin:$HOME/.local/bin:$HOME/.npm-global/bin
+export PATH=$PATH:$HOME/.local/share/gem/ruby/3.0.0/bin:$HOME/.local/bin:$HOME/.npm-global/bin
+# export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+# export ANTHROPIC_AUTH_TOKEN=""  # set locally, do not commit secrets
+export ANTHROPIC_BASE_URL=https://opencode.ai/zen/go/v1
+export ANTHROPIC_AUTH_TOKEN=""  # set locally, do not commit secrets
+export ANTHROPIC_MODEL=minimax-m3[1m]
+export ANTHROPIC_DEFAULT_OPUS_MODEL=minimax-m3[1m]
+export ANTHROPIC_DEFAULT_SONNET_MODEL=minimax-m3[1m]
+export ANTHROPIC_DEFAULT_HAIKU_MODEL=minimax-m3
+export CLAUDE_CODE_SUBAGENT_MODEL=minimax-m3
+export CLAUDE_CODE_EFFORT_LEVEL=high
 export FZF_DEFAULT_OPTS="
 --height 40%
 --layout=reverse
 --border
 --info=inline
 "
-export TERMINAL=kitty
 
-# Path to your oh-my-zsh installation.
-# ZSH=/usr/share/oh-my-zsh/
-ZSH=/home/sporeking/.oh-my-zsh
-bindkey -v
-bindkey -s '^[[A' fzf-find-file
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
 
-
-
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time oh-my-zsh is loaded, in which case,
-# to know which specific one was loaded, run: echo $RANDOM_THEME
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="powerlevel10k/powerlevel10k"
-
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in $ZSH/themes/
-# If set to an empty array, this variable will have no effect.
-# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
-
-# Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
-
-# Uncomment the following line to use hyphen-insensitive completion.
-# Case-sensitive completion must be off. _ and - will be interchangeable.
-# HYPHEN_INSENSITIVE="true"
-
-# Uncomment one of the following lines to change the auto-update behavior
-# zstyle ':omz:update' mode disabled  # disable automatic updates
-# zstyle ':omz:update' mode auto      # update automatically without asking
-# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
-# Uncomment the following line to change how often to auto-update (in days).
-# zstyle ':omz:update' frequency 13
-
-# Uncomment the following line if pasting URLs and other text is messed up.
-# DISABLE_MAGIC_FUNCTIONS="true"
-
-# Uncomment the following line to disable colors in ls.
-# DISABLE_LS_COLORS="true"
-
-# Uncomment the following line to disable auto-setting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment the following line to enable command auto-correction.
-# ENABLE_CORRECTION="true"
-
-# Uncomment the following line to display red dots whilst waiting for completion.
-# You can also set it to another string to have that shown instead of the default red dots.
-# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
-# Caution: this setting can cause issues with multiline prompts in zsh < 5.7.1 (see #5765)
-# COMPLETION_WAITING_DOTS="true"
-
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
-
-# Uncomment the following line if you want to change the command execution time
-# stamp shown in the history command output.
-# You can set one of the optional three formats:
-# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
-# or set a custom format using the strftime function format specifications,
-# see 'man strftime' for details.
-# HIST_STAMPS="mm/dd/yyyy"
-
-# Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
-
-# Which plugins would you like to load?
-# Standard plugins can be found in $ZSH/plugins/
-# Custom plugins may be added to $ZSH_CUSTOM/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-# Add wisely, as too many plugins slow down shell startup.
-plugins=(git 
-  zsh-autosuggestions 
-  extract 
-  z
-  zsh-syntax-highlighting 
-  conda-zsh-completion
-  fzf
-  # zsh-vi-mode
-)
-
+# 立即将新命令追加到历史文件，而不是等 Shell 退出时才写入
+# 这是防止历史丢失的关键设置！
+setopt INC_APPEND_HISTORY
+# 多个终端会话共享历史记录
+setopt SHARE_HISTORY
+# 如果输入的新命令是重复的，则在历史中删除旧的那条
+setopt HIST_IGNORE_ALL_DUPS
+# 不要记录连续重复的命令
+setopt HIST_IGNORE_DUPS
+# 不要记录以空格开头的命令
+setopt HIST_IGNORE_SPACE
+# 在历史文件中保存时间戳
+setopt EXTENDED_HISTORY
 
 # User configuration
 
@@ -107,12 +45,6 @@ plugins=(git
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
@@ -124,27 +56,16 @@ plugins=(git
 #
 # Example aliases
 alias ll="ls -lh"
+alias sp="scryer-prolog"
 alias ga="git add ."
 alias gs="git status"
 alias gc="git commit"
 alias v="nvim"
 alias sg="sgpt"
 alias ti="tgpt -i"
-alias tast="tmux attach -t"
-alias py312="/home/sporeking/miniconda3/envs/py312/bin/python"
-alias py38="/home/sporeking/miniconda3/envs/py38/bin/python"
-
-alias lightup="bash ~/scripts/turn_light.sh"
-alias lightdown="bash ~/scripts/turn_down_light.sh"
+alias ca='conda activate'
 
 alias fv="rg --hidden --glob '!.cache' --glob '!.git' --files | fzf | xargs -r nvim"
-
-alias rt="sh ~/change_hyprland_layout.sh eDP-2"
-
-alias ca="conda activate"
-alias dca="conda deactivate"
-alias psyu="sudo pacman -Syuu"
-alias ysyu="yay -Syyu"
 
 fcd() {
   # 使用 rg 查找目录，并通过 fzf 选择
@@ -169,7 +90,7 @@ fo() {
   extension="${file##*.}"
   case "$extension" in 
     pdf)
-      firefox-nightly "$file"
+      microsoft-edge-stable "$file"
       ;;
     jpg|jpeg|png|gif)
       xdg-open "$file"
@@ -216,53 +137,100 @@ eject_disk() {
 }
 
 # alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
 
-ZSH_CACHE_DIR=$HOME/.cache/oh-my-zsh
-if [[ ! -d $ZSH_CACHE_DIR ]]; then
-  mkdir $ZSH_CACHE_DIR
-fi
-
-# plugins+=(zsh-vi-mode)
-
-source $ZSH/oh-my-zsh.sh
-
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/home/sporeking/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/home/sporeking/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/home/sporeking/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/home/sporeking/miniconda3/bin:$PATH"
-    fi
+# __conda_setup="$('/home/sporeking/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+# if [ $? -eq 0 ]; then
+#     eval "$__conda_setup"
+# else
+#     if [ -f "/home/sporeking/miniconda3/etc/profile.d/conda.sh" ]; then
+#         . "/home/sporeking/miniconda3/etc/profile.d/conda.sh"
+#     else
+#         export PATH="/home/sporeking/miniconda3/bin:$PATH"
+#     fi
+# fi
+# unset __conda_setup
+__conda_setup_script="/home/sporeking/miniconda3/bin/conda"
+
+if [[ -x "$__conda_setup_script" ]]; then
+    conda() {
+        # 1. 首先“卸载”我们自己写的这个简易版 conda 函数，防止无限循环
+        unset -f conda
+
+        # 2. 打印一个提示信息（可选）
+        # echo ":: 首次使用，正在初始化 Conda..." >&2
+
+        # 3. 加载 Conda 官方的配置脚本，让它定义出功能完备的 conda 函数
+        eval "$("$__conda_setup_script" shell.zsh hook)"
+
+        # 4. (关键步骤) 重新执行原始命令（例如 conda activate py312）
+        #    这一次，被调用的是刚刚由 eval 定义的那个“正规”函数
+        conda "$@"
+    }
 fi
-unset __conda_setup
 # <<< conda initialize <<<
-# conda deactivate
-conda activate py312
+# conda activate py312
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-export LIBVIRT_DEFAULT_URI='qemu:///system'
-export GEM_HOME=/home/sporeking/.gem
-export PATH=/home/sporeking/.gem/bin:/home/sporeking/miniconda3/envs/py312/bin:/home/sporeking/miniconda3/condabin:/usr/local/sbin:/usr/local/bin:/usr/bin:/Applications:/var/lib/flatpak/exports/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/home/sporeking/.local/share/gem/ruby/3.0.0/bin:/home/sporeking/.local/bin:/home/sporeking/.npm-global/bin:/home/sporeking/.local/share/gem/ruby/3.3.0/bin:/home/sporeking/.local/bin:/home/sporeking/.npm-global/bin
-export GEM_HOME=/home/sporeking/.gem
-export PATH=/home/sporeking/.gem/bin:/home/sporeking/.gem/bin:/home/sporeking/miniconda3/envs/py312/bin:/home/sporeking/miniconda3/condabin:/usr/local/sbin:/usr/local/bin:/usr/bin:/Applications:/var/lib/flatpak/exports/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/home/sporeking/.local/share/gem/ruby/3.0.0/bin:/home/sporeking/.local/bin:/home/sporeking/.npm-global/bin:/home/sporeking/.local/share/gem/ruby/3.3.0/bin:/home/sporeking/.local/bin:/home/sporeking/.npm-global/bin
 
-[ -z "$NVM_DIR" ] && export NVM_DIR="$HOME/.nvm"
-source /usr/share/nvm/nvm.sh
-source /usr/share/nvm/bash_completion
-# source /usr/share/nvm/install-nvm-exec
-export MUJOCO_PY_MUJOCO_PATH=~/.mujoco/mujoco210
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.mujoco/mujoco210/bin
-export PATH=$PATH:~/.mujoco/mujoco210/bin
+### Added by Zinit's installer
+if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
+    print -P "%F{33} %F{220}Installing %F{33}ZDHARMA-CONTINUUM%F{220} Initiative Plugin Manager (%F{33}zdharma-continuum/zinit%F{220})…%f"
+    command mkdir -p "$HOME/.local/share/zinit" && command chmod g-rwX "$HOME/.local/share/zinit"
+    command git clone https://github.com/zdharma-continuum/zinit "$HOME/.local/share/zinit/zinit.git" && \
+        print -P "%F{33} %F{34}Installation successful.%f%b" || \
+        print -P "%F{160} The clone has failed.%f%b"
+fi
+
+source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
+autoload -Uz _zinit
+(( ${+_comps} )) && _comps[zinit]=_zinit
+
+# Load a few important annexes, without Turbo
+# (this is currently required for annexes)
+# zinit ice wait='0' lucid
+zinit light-mode for \
+    zdharma-continuum/zinit-annex-as-monitor \
+    zdharma-continuum/zinit-annex-bin-gem-node \
+    zdharma-continuum/zinit-annex-patch-dl \
+    zdharma-continuum/zinit-annex-rust
+
+# zinit ice wait lucid atload'_zsh_autosuggest_start'
+zinit ice lucid atload"bindkey '^E' autosuggest-accept"
+zinit light zsh-users/zsh-autosuggestions
+
+zinit ice lucid wait='0'; zinit light zdharma/fast-syntax-highlighting
+# zinit ice lucid wait='0'; zinit light agkozak/zsh-z
+
+zinit ice from"gh-r" as"program"
+zinit light starship/starship
+
+zinit ice atload'eval "$(starship init zsh)"'
+zinit snippet /dev/null
+
+zinit snippet /usr/share/fzf/key-bindings.zsh
+
+# 加载 fzf 提供的补全功能
+zinit snippet /usr/share/fzf/completion.zsh
+### End of Zinit's installer chunk
+eval "$(zoxide init zsh)"
+
+# Shell-GPT integration ZSH v0.2
+_sgpt_zsh() {
+if [[ -n "$BUFFER" ]]; then
+    _sgpt_prev_cmd=$BUFFER
+    BUFFER+="⌛"
+    zle -I && zle redisplay
+    BUFFER=$(sgpt --shell <<< "$_sgpt_prev_cmd" --no-interaction)
+    zle end-of-line
+fi
+}
+zle -N _sgpt_zsh
+bindkey ^l _sgpt_zsh
+# Shell-GPT integration ZSH v0.2
 export PATH=$PATH:/home/sporeking/.cargo/bin
-# export PATH=$PATH:~/tools/mujoco-3.2.6/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia
+export GOOGLE_CLOUD_PROJECT="aerobic-oxide-470802-n9"
+
+# Add bun global bin to PATH for oh-my-opencode-dashboard
+export PATH="/home/sporeking/.bun/bin:$PATH"

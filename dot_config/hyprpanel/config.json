@@ -11,14 +11,14 @@
   "bar.workspaces.show_numbered": false,
   "bar.workspaces.showWsIcons": true,
   "bar.workspaces.showApplicationIcons": true,
-  "bar.scrollSpeed": 7,
+  "bar.scrollSpeed": 4,
   "theme.bar.buttons.enableBorders": false,
   "theme.bar.buttons.radius": "0.6em",
   "theme.bar.layer": "top",
   "theme.bar.scaling": 80,
   "menus.clock.time.military": false,
   "menus.clock.time.hideSeconds": true,
-  "menus.dashboard.shortcuts.left.shortcut1.command": "/usr/bin/microsoft-edge-stable %U --enable-features=UseOzonePlatform --ozone-platform=wayland --enable-wayland-ime --disable-gpu --use-gl=desktop\n",
+  "menus.dashboard.shortcuts.left.shortcut1.command": "Firefox",
   "menus.dashboard.shortcuts.right.shortcut3.command": "hyprshot -m region --clipboard-only",
   "bar.customModules.cpuTemp.unit": "metric",
   "bar.bluetooth.label": false,
@@ -43,10 +43,11 @@
     "0": {
       "left": [
         "dashboard",
-        "cava",
         "hyprsunset",
+        "ram",
+        "cpu",
+        "cputemp",
         "updates",
-        "media",
         "windowtitle"
       ],
       "middle": [
@@ -57,9 +58,6 @@
         "network",
         "bluetooth",
         "battery",
-        "ram",
-        "cpu",
-        "cputemp",
         "systray",
         "clock",
         "notifications"
@@ -91,6 +89,7 @@
       ],
       "right": [
         "volume",
+        "systray",
         "clock",
         "notifications"
       ]
@@ -99,7 +98,7 @@
   "bar.workspaces.applicationIconOncePerWorkspace": true,
   "bar.workspaces.showAllActive": true,
   "bar.workspaces.applicationIconEmptyWorkspace": "",
-  "bar.customModules.cpuTemp.sensor": "/sys/devices/platform/coretemp.0/hwmon/hwmon7/temp1_input",
+  "bar.customModules.cpuTemp.sensor": "",
   "theme.bar.buttons.opacity": 100,
   "theme.bar.buttons.background_opacity": 70,
   "theme.bar.buttons.workspaces.background": "#242438",
@@ -109,7 +108,7 @@
   "notifications.ignore": [
     "QQ"
   ],
-  "menus.dashboard.directories.left.directory1.command": "sigma-file-manager",
+  "menus.dashboard.directories.left.directory1.command": "nautilus",
   "menus.dashboard.directories.left.directory1.label": "󰉍 Files",
   "menus.dashboard.directories.left.directory2.command": "linuxqq",
   "menus.dashboard.directories.left.directory2.label": " QQ",
@@ -124,7 +123,7 @@
   "menus.dashboard.shortcuts.left.shortcut3.tooltip": "Kitty",
   "menus.dashboard.shortcuts.left.shortcut3.command": "kitty",
   "menus.dashboard.shortcuts.left.shortcut3.icon": "",
-  "bar.network.truncation_size": 9,
+  "bar.network.truncation_size": 8,
   "bar.workspaces.workspaceMask": false,
   "bar.launcher.rightClick": "rofi -combi-modi drun -show combi -icon-theme 'Papirus' -show-icons -run-shell-command '{terminal} -e zsh -ic '{cmd} && read''",
   "theme.bar.menus.menu.network.scaling": 95,
@@ -140,5 +139,25 @@
   "theme.font.style": "italic",
   "bar.workspaces.workspaces": 6,
   "theme.bar.buttons.battery.text": "#dc8add",
-  "theme.bar.buttons.battery.icon": "#dc8add"
+  "theme.bar.buttons.battery.icon": "#dc8add",
+  "menus.dashboard.stats.enable_gpu": true,
+  "bar.network.showWifiInfo": true,
+  "bar.battery.hideLabelWhenFull": true,
+  "bar.media.show_active_only": true,
+  "bar.notifications.show_total": false,
+  "bar.launcher.autoDetectIcon": true,
+  "menus.dashboard.stats.interval": 100,
+  "menus.dashboard.powermenu.avatar.name": "Sporeking",
+  "menus.dashboard.powermenu.avatar.image": "/home/sporeking/Pictures/nordic-wallpapers/ign_animeGirlSleeping.png",
+  "bar.network.rightClick": "nm-connection-editor",
+  "bar.volume.rightClick": "hyprshot -m region --clipboard-only",
+  "bar.customModules.storage.paths": [
+    "/"
+  ],
+  "theme.bar.buttons.systray.enableBorder": false,
+  "bar.customModules.ram.round": true,
+  "bar.customModules.ram.labelType": "used/total",
+  "theme.notification.enableShadow": true,
+  "menus.dashboard.shortcuts.left.shortcut1.icon": "🦊",
+  "menus.dashboard.shortcuts.left.shortcut1.tooltip": "Firefox"
 }

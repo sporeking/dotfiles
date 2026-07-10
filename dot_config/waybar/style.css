@@ -68,6 +68,21 @@ window#waybar {
 	padding: 5px 10px;
 }
 
+#custom-rofi-launcher {
+    /*background-color: #282828;*/
+    /*border-radius: 16px;*/
+    /*margin: 5px;*/
+    /*margin-left: 5px;*/
+    /*margin-right: 0px;*/
+    /*padding: 0px 12px 0px 8px;*/
+    /*font-weight: bold;*/
+    /* background: #282828; */
+    margin: 0px 0px 0px 0px;
+    padding: 0px 3px;
+    font-size: 15px;
+    /*border-right: solid 1px #282738;*/
+}
+
 #tray {
     /* background: #282828; */
     margin: 5px 3px 5px 3px;
@@ -232,6 +247,18 @@ window#waybar {
     padding: 0px 12px 0px 8px;
     font-weight: bold;
 }
+#temperature {
+    background-color: #282828;
+    /*color: #83A598;*/
+    border-radius: 16px;
+    margin: 5px;
+    margin-left: 3px;
+    margin-right: 3px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    padding: 0px 12px 0px 8px;
+    font-weight: bold;
+}
 
 #memory {
     background-color: #282828;
@@ -242,7 +269,7 @@ window#waybar {
     margin-right: 3px;
     margin-top: 5px;
     margin-bottom: 5px;
-    padding: 0px 10px 0px 10px;
+    padding: 0px 12px 0px 8px;
     font-weight: bold;
 }
 

@@ -1,2 +1,5 @@
 /home/sporeking/miniconda3
-/home/sporeking/miniconda3/envs/env1
+/home/sporeking/miniconda3/envs/py312
+/home/sporeking/miniconda3/envs/potassco
+/home/sporeking/miniconda3/envs/miniabl
+/home/sporeking/miniconda3/envs/py313

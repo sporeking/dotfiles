@@ -24,12 +24,13 @@
         // "mpd",
         // "idle_inhibitor",
 	      "tray",
+        "custom/rofi-launcher",
         "pulseaudio",
         "network",
         "power-profiles-daemon",
         "cpu",
         "memory",
-        //"temperature",
+        // "temperature",
         "backlight",
         //"keyboard-state",
         // "sway/language",
@@ -116,6 +117,13 @@
             "activated": "",
             "deactivated": ""
         }
+    },
+    "custom/rofi-launcher": {
+        // "format": "",
+        "format": "Rofi 🚀",
+        "on-click": "rofi -combi-modi window,drun,ssh -show combi -icon-theme 'Papirus' -show-icons -run-shell-command '{terminal} -e zsh -ic '{cmd}; exec zsh''",
+        "on-click-right": "rofi -show p -modi p:rofi-power-menu",
+        "on-click-middle": "xdotool key Escape"
     },
     "tray": {
         "icon-size": 21,
