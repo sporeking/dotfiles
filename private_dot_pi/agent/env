@@ -1,0 +1,3 @@
+# Machine-local credentials for pi. Populate these values after applying dotfiles.
+export SPOREKING_GPT_API_KEY=''
+export SPOREKING_GROK_API_KEY=''

@@ -1,0 +1,12 @@
+{
+  "name": "pi-extensions",
+  "private": true,
+  "dependencies": {
+    "@mrclrchtr/supi-bash-timeout": "^2.3.0",
+    "context-mode": "^1.0.169",
+    "pi-autoresearch": "^1.6.2",
+    "pi-rewind": "^0.5.0",
+    "pi-subagents": "^0.34.0",
+    "pi-web-access": "^0.13.0"
+  }
+}

@@ -3,6 +3,12 @@ eval $(keychain --quiet --eval id_rsa ) > /dev/null
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
 export PATH=$PATH:$HOME/.local/share/gem/ruby/3.0.0/bin:$HOME/.local/bin:$HOME/.npm-global/bin
+
+# Machine-local secrets used by pi and other CLI tools. This file is private in chezmoi.
+if [[ -r "$HOME/.pi/agent/env" ]]; then
+    source "$HOME/.pi/agent/env"
+fi
+
 # export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 # export ANTHROPIC_AUTH_TOKEN=""  # set locally, do not commit secrets
 export ANTHROPIC_BASE_URL=https://opencode.ai/zen/go/v1

@@ -74,6 +74,13 @@ chezmoi 源目录在本机的路径是：
 │   ├── tofi/config
 │   ├── mako/config              # 旧通知守护（现多用 hyprpanel）
 │   └── waybar/                  # 旧状态栏配置（备用）
+├── dot_pi/
+│   └── agent/                   # → ~/.pi/agent/，pi 模型、扩展、MCP 与 npm 锁文件
+├── private_dot_pi/
+│   └── agent/env                # → ~/.pi/agent/env，私有权限的空密钥模板
+├── dot_agents/
+│   ├── skills/                  # → ~/.agents/skills/，已安装的用户 skills
+│   └── .skill-lock.json         # → ~/.agents/.skill-lock.json
 └── scripts/
     ├── executable_turn_light.sh      # → ~/scripts/turn_light.sh
     ├── executable_turn_down_light.sh # → ~/scripts/turn_down_light.sh
@@ -124,6 +131,7 @@ chezmoi apply         # 写入 $HOME
 | `~/.config/hypr/hyprpaper.conf` | 壁纸路径（默认 `~/Pictures/nordic-wallpapers/...`） |
 | `~/scripts/*.sh` | 若用户名不是 `sporeking`，检查脚本内绝对路径 |
 | `~/.config/xremap/config.yml` | 键位重映射（**未**纳入本仓库，需自备） |
+| `~/.pi/agent/env` | 填入 `SPOREKING_GPT_API_KEY`、`SPOREKING_GROK_API_KEY`；仓库只保留空模板 |
 
 ### 3. 验证
 
@@ -294,6 +302,34 @@ export ANTHROPIC_MODEL=minimax-m3[1m]
 grep -n 'TOKEN\|sk-' ~/.local/share/chezmoi/dot_zshrc
 ```
 
+### Pi Coding Agent
+
+pi 的可同步配置由以下文件管理：
+
+```text
+~/.pi/agent/settings.json       # 默认 provider/model、包与子代理设置
+~/.pi/agent/models.json         # 自定义 provider 与模型定义（仅引用环境变量）
+~/.pi/agent/mcp.json            # MCP server 配置
+~/.pi/agent/extensions/         # 本地扩展
+~/.pi/agent/npm/package*.json   # 插件的精确依赖版本
+~/.agents/skills/               # 用户安装的 skills
+```
+
+在新机器运行 `chezmoi apply` 后，安装与本机一致版本的 pi 和插件依赖：
+
+```bash
+npm install -g @earendil-works/pi-coding-agent@0.80.6
+cd ~/.pi/agent/npm && npm ci
+```
+
+然后在本机私有文件 `~/.pi/agent/env` 填入 API key，并重新打开终端或执行：
+
+```bash
+source ~/.zshrc
+```
+
+`models.json` 仅引用 `$SPOREKING_GPT_API_KEY` 和 `$SPOREKING_GROK_API_KEY`；`auth.json`、会话、运行历史和 context-mode 数据库均不受管理，不能提交。
+
 ### Kitty
 
 `~/.config/kitty/kitty.conf` + `current-theme.conf`。  
@@ -395,7 +431,8 @@ Shell：
 
 **已刻意不入库 / 入库为空：**
 
-- `ANTHROPIC_AUTH_TOKEN` 及任何 `sk-...` 形态密钥  
+- `ANTHROPIC_AUTH_TOKEN`、`SPOREKING_*_API_KEY` 及任何 `sk-...` 形态密钥
+- `~/.pi/agent/auth.json`、会话、运行历史与 context-mode 数据库
 - SSH 私钥、`~/.ssh/`  
 - 浏览器 / 聊天软件配置  
 - xremap 设备节点相关隐私脚本策略（`private_` 前缀）
