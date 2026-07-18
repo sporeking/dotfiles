@@ -1,0 +1,134 @@
+# Wayle migration from HyprPanel
+# Generated for the current Hyprland setup.
+
+[general]
+font-sans = "FiraCode Nerd Font Mono"
+font-mono = "FiraCode Nerd Font Mono"
+tearing-mode = true
+
+[bar]
+scale = 0.9
+inset-edge = 0
+inset-ends = 0
+padding = 0.3
+padding-ends = 0.5
+module-gap = 0.4
+location = "top"
+exclusive = true
+layer = "top"
+bg = "#1c1c2c"
+background-opacity = 50
+border-location = "none"
+button-variant = "basic"
+button-opacity = 100
+button-bg-opacity = 75
+button-icon-size = 1.0
+button-icon-padding = 0.3
+button-label-size = 1.2
+button-label-weight = "bold"
+button-label-padding = 0.7
+button-gap = 1.25
+button-border-location = "none"
+button-group-border-location = "none"
+button-rounding = "sm"
+rounding = "none"
+
+[[bar.layout]]
+monitor = "*"
+left = ["dashboard", "hyprsunset", "ram", "cpu", "custom-updates", "window-title"]
+center = ["hyprland-workspaces"]
+right = ["volume", "network", "bluetooth", "battery", "systray", "clock", "notifications"]
+
+[[bar.layout]]
+monitor = "eDP-2"
+extends = "*"
+left = ["dashboard", "hyprland-workspaces", "window-title"]
+center = ["media"]
+right = ["volume", "clock", "notifications"]
+
+[styling]
+scale = 1.0
+rounding = "sm"
+theme-provider = "wayle"
+
+[styling.palette]
+bg = "#141420"
+surface = "#1c1c2c"
+elevated = "#242438"
+fg = "#d4d6e8"
+fg-muted = "#8a8ca4"
+primary = "#dc8add"
+red = "#dc8add"
+yellow = "#e0b870"
+green = "#68c898"
+blue = "#78a0e0"
+
+[modules.cpu]
+format = "{{ percent }}% {{ temp_c }}C"
+poll-interval-ms = 2000
+
+[modules.ram]
+format = "{{ used_gib }}/{{ total_gib }}G"
+poll-interval-ms = 5000
+
+[modules.hyprland-workspaces]
+min-workspace-count = 6
+monitor-specific = false
+display-mode = "none"
+app-icons-show = true
+app-icons-dedupe = true
+app-icons-empty = "si-archlinux-symbolic"
+icon-gap = 0.2
+workspace-padding = 0.2
+icon-size = 0.9
+label-size = 1.0
+active-indicator = "underline"
+container-bg-color = "#242438"
+
+[modules.network]
+label-max-length = 8
+label-show = true
+
+[modules.bluetooth]
+label-show = false
+
+[modules.media]
+label-max-length = 35
+
+[modules.notifications]
+label-show = false
+blocklist = ["QQ"]
+popup-position = "top-right"
+
+[modules.clock]
+format = "%a %b %d %I:%M %p"
+dropdown-show-seconds = false
+
+[modules.weather]
+provider = "open-meteo"
+location = "Suzhou"
+units = "metric"
+refresh-interval-seconds = 1800
+
+[modules.dashboard]
+border-show = true
+
+[modules.window-title]
+label-max-length = 25
+
+[[modules.custom]]
+id = "updates"
+command = "checkupdates 2>/dev/null | wc -l"
+interval-ms = 1440000
+format = "{{ output }}"
+icon-name = "ld-refresh-cw-symbolic"
+label-show = true
+
+# Defined for future GPU telemetry in a dashboard or bar position.
+[[modules.custom]]
+id = "gpu"
+command = "nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used --format=csv,noheader,nounits 2>/dev/null | awk -F', ' '{printf \"GPU %s%% %sC %sMiB\", $1, $2, $3}'"
+interval-ms = 5000
+format = "{{ output }}"
+icon-name = "ld-activity-symbolic"
+label-show = true

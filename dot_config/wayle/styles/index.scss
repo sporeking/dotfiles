@@ -1,0 +1,17 @@
+// HyprPanel visual compatibility layer.
+// Wayle exposes the main bar geometry through config.toml; these rules restore
+// the original font family, weight, and italic label treatment.
+
+window {
+    font-family: "FiraCode Nerd Font Mono";
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-style: italic;
+}
+
+.bar .bar-button-label,
+.bar .workspace-label,
+.bar .workspace-divider {
+    font-family: "FiraCode Nerd Font Mono";
+    font-style: italic;
+}
