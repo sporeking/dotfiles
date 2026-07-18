@@ -1,0 +1,37 @@
+{
+  "lastChangelogVersion": "0.80.6",
+  "defaultProvider": "sporeking-gpt",
+  "defaultModel": "gpt-5.6-terra",
+  "defaultThinkingLevel": "off",
+  "theme": "dark",
+  "packages": [
+    "npm:pi-web-access",
+    "npm:context-mode",
+    "npm:pi-autoresearch",
+    "npm:pi-subagents",
+    "npm:@mrclrchtr/supi-bash-timeout",
+    "npm:pi-rewind"
+  ],
+  "subagents": {
+    "agentOverrides": {
+      "delegate": {
+        "model": "deepseek/deepseek-v4-flash"
+      },
+      "worker": {
+        "model": "deepseek/deepseek-v4-flash"
+      },
+      "context-builder": {
+        "model": "sporeking-gpt/gpt-5.6-luna"
+      },
+      "planner": {
+        "model": "sporeking-gpt/gpt-5.6-sol"
+      },
+      "reviewer": {
+        "model": "sporeking-gpt/gpt-5.6-sol"
+      },
+      "oracle": {
+        "model": "sporeking-gpt/gpt-5.6-sol"
+      }
+    }
+  }
+}
