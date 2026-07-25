@@ -1,0 +1,161 @@
+window#launcher-window {
+  background: transparent;
+}
+
+.launcher-panel {
+  min-width: 720px;
+  min-height: 650px;
+  padding: 20px;
+  color: #d4d6e8;
+  background-color: rgba(20, 20, 32, 0.97);
+  border: 1px solid rgba(220, 138, 221, 0.3);
+  border-radius: 14px;
+}
+
+.launcher-header {
+  min-height: 54px;
+  margin-bottom: 14px;
+}
+
+.launcher-title {
+  color: #f2f1f7;
+  font-family: "LXGW WenKai", "LXGW WenKai Mono", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.launcher-result-count {
+  color: #8a8ca4;
+  font-family: "FiraCode Nerd Font Mono", monospace;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.view-toggle {
+  min-height: 38px;
+  padding: 0 12px;
+  color: #e9d8ec;
+  background-image: none;
+  background-color: rgba(220, 138, 221, 0.16);
+  border: 1px solid rgba(220, 138, 221, 0.38);
+  border-radius: 8px;
+  box-shadow: none;
+  font-family: "LXGW WenKai", "LXGW WenKai Mono", sans-serif;
+  font-size: 13px;
+}
+
+.view-toggle:hover,
+.view-toggle:focus-visible {
+  background-color: rgba(220, 138, 221, 0.28);
+  border-color: rgba(220, 138, 221, 0.7);
+}
+
+.launcher-search {
+  min-height: 42px;
+  margin-bottom: 14px;
+  padding: 0 12px;
+  color: #f2f1f7;
+  caret-color: #dc8add;
+  background-color: rgba(36, 36, 56, 0.88);
+  border: 1px solid rgba(138, 140, 164, 0.3);
+  border-radius: 8px;
+  font-family: "LXGW WenKai", "LXGW WenKai Mono", sans-serif;
+  font-size: 14px;
+}
+
+.launcher-search:focus-within {
+  border-color: rgba(220, 138, 221, 0.72);
+}
+
+.launcher-search placeholder {
+  color: #8a8ca4;
+}
+
+.launcher-status {
+  min-height: 26px;
+  margin: 0 3px 10px;
+  color: #e0b870;
+  font-family: "LXGW WenKai", "LXGW WenKai Mono", sans-serif;
+  font-size: 13px;
+}
+
+.launcher-status-error {
+  color: #f08d9b;
+}
+
+.launcher-scrolled {
+  min-height: 0;
+  border-radius: 8px;
+}
+
+.launcher-scrolled undershoot,
+.launcher-scrolled overshoot {
+  background: none;
+}
+
+flowbox {
+  padding: 3px;
+}
+
+.app-tile {
+  min-width: 148px;
+  min-height: 116px;
+  padding: 12px 8px;
+  color: #d4d6e8;
+  background-image: none;
+  background-color: rgba(36, 36, 56, 0.78);
+  border: 1px solid rgba(138, 140, 164, 0.18);
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.app-tile:hover,
+.app-tile:focus-visible {
+  color: #fff7ff;
+  background-color: rgba(220, 138, 221, 0.2);
+  border-color: rgba(220, 138, 221, 0.62);
+}
+
+.all-apps-tile {
+  color: #e9d8ec;
+  background-color: rgba(220, 138, 221, 0.12);
+  border-color: rgba(220, 138, 221, 0.38);
+}
+
+.app-icon {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.app-name {
+  min-height: 34px;
+  color: inherit;
+  font-family: "LXGW WenKai", "LXGW WenKai Mono", sans-serif;
+  font-size: 13px;
+}
+
+.context-menu {
+  min-width: 170px;
+  padding: 5px;
+  color: #d4d6e8;
+  background-color: #242438;
+  border: 1px solid rgba(220, 138, 221, 0.4);
+  border-radius: 8px;
+}
+
+.context-menu-button {
+  min-height: 34px;
+  padding: 0 10px;
+  color: #d4d6e8;
+  background-image: none;
+  box-shadow: none;
+  border-radius: 5px;
+  font-family: "LXGW WenKai", "LXGW WenKai Mono", sans-serif;
+  font-size: 13px;
+}
+
+.context-menu-button:hover,
+.context-menu-button:focus-visible {
+  color: #fff7ff;
+  background-color: rgba(220, 138, 221, 0.2);
+}

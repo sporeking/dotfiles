@@ -119,6 +119,7 @@ refresh-interval-seconds = 1800
 
 [modules.dashboard]
 border-show = true
+right-click = "/home/sporeking/scripts/wayle-app-launcher/launcher"
 
 [modules.window-title]
 label-max-length = 25

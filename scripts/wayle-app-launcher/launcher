@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+layer_shell_lib=/usr/lib/libgtk4-layer-shell.so
+if [ ! -r "$layer_shell_lib" ]; then
+  printf '%s\n' "wayle-app-launcher: required library is missing: $layer_shell_lib" >&2
+  exit 1
+fi
+if [ -n "${LD_PRELOAD:-}" ]; then
+  export LD_PRELOAD="$layer_shell_lib:$LD_PRELOAD"
+else
+  export LD_PRELOAD="$layer_shell_lib"
+fi
+
+exec /usr/bin/python3 "$script_dir/app.py" "$@"
