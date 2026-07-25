@@ -1,17 +1,27 @@
-// HyprPanel visual compatibility layer.
-// Wayle exposes the main bar geometry through config.toml; these rules restore
-// the original font family, weight, and italic label treatment.
+$font-stack: "FiraCode Nerd Font Mono", "LXGW WenKai Mono";
 
-window {
-    font-family: "FiraCode Nerd Font Mono";
+// Use FiraCode for Latin text and let CJK glyphs resolve to LXGW WenKai.
+// Keep the mixed stack upright for panels, then slant technical/bar text.
+
+window,
+window.settings-window,
+.systray-menu,
+.systray-menu popover.menu {
+    font-family: $font-stack;
     font-size: 1.3rem;
-    font-weight: 700;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.font-mono,
+.setting-unit {
+    font-family: $font-stack;
     font-style: italic;
 }
 
 .bar .bar-button-label,
 .bar .workspace-label,
 .bar .workspace-divider {
-    font-family: "FiraCode Nerd Font Mono";
+    font-family: $font-stack;
     font-style: italic;
 }

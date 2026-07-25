@@ -2,7 +2,7 @@
 # Generated for the current Hyprland setup.
 
 [general]
-font-sans = "FiraCode Nerd Font Mono"
+font-sans = "LXGW WenKai Mono"
 font-mono = "FiraCode Nerd Font Mono"
 tearing-mode = true
 
@@ -63,8 +63,15 @@ yellow = "#e0b870"
 green = "#68c898"
 blue = "#78a0e0"
 
+[modules.hyprsunset]
+temperature = 5000
+gamma = 100
+left-click = ":toggle"
+scroll-up = "/home/sporeking/scripts/wayle-hyprsunset-temperature/temperature-controller up"
+scroll-down = "/home/sporeking/scripts/wayle-hyprsunset-temperature/temperature-controller down"
+
 [modules.cpu]
-format = "{{ percent }}% {{ temp_c }}C"
+format = "{{ percent }}% {{ temp_c }}\u00B0C"
 poll-interval-ms = 2000
 
 [modules.ram]
@@ -118,11 +125,12 @@ label-max-length = 25
 
 [[modules.custom]]
 id = "updates"
-command = "checkupdates 2>/dev/null | wc -l"
+command = "bash -c 'checkupdates --nocolor | wc -l; status=${PIPESTATUS[0]}; if [ \"$status\" -eq 0 ] || [ \"$status\" -eq 2 ]; then exit 0; fi; exit \"$status\"'"
 interval-ms = 1440000
 format = "{{ output }}"
 icon-name = "ld-refresh-cw-symbolic"
 label-show = true
+left-click = "kitty --hold sudo pacman -Syu"
 
 # Defined for future GPU telemetry in a dashboard or bar position.
 [[modules.custom]]
