@@ -70,12 +70,11 @@ tie-breaker. Typing in the search field uses Astal Apps fuzzy matching.
 - After a favorite mutation, the state file is replaced and the visible grid is
   rebuilt from the new state.
 
-The Escape key hides the panel. A separate full-screen transparent layer-shell
-surface receives clicks outside the panel and hides it immediately. The panel
-also observes its `is-active` state and closes when the compositor activates
-another window, covering the case where a pointer press is routed directly to
-that window. A second invocation toggles the existing AGS instance instead of
-creating a duplicate.
+The Escape key hides the panel. A single full-output layer-shell surface holds
+both the dimmed dismiss area and the panel overlay. A capture-phase pointer
+gesture computes the panel's exact bounds and hides the surface only when the
+press is outside those bounds. A second invocation toggles the existing AGS
+instance instead of creating a duplicate.
 
 ## Layout and visual treatment
 
@@ -116,13 +115,14 @@ The dashboard left-click action and existing Rofi key binding remain unchanged.
 No Wayle source file, module registration, or dropdown implementation is
 modified.
 
-The launcher uses an `overlay` panel anchored to the top-left with exclusive
-keyboard input. A separate full-screen transparent `top` layer uses no keyboard
-input and is created before the panel, so the panel remains above it while
-outside pointer presses reach the dismiss surface. The panel also listens for
-`notify::is-active`; when focus moves to another compositor window it closes
-after an idle-cycle, unless a launcher context menu is open. Context-menu
-popovers are owned by the application tile and remain interactive.
+The launcher uses one `overlay` layer with exclusive keyboard input and anchors
+it to all four output edges. When the surface maps, the launcher resolves its
+GDK monitor, validates the monitor geometry, and sizes the input surface to the
+full logical output. The panel is a measured `Gtk.Overlay` child aligned to the
+top-left; a root capture gesture compares every pointer press against its
+computed Graphene bounds. This makes outside-click dismissal independent of
+focus changes or idle-cycle timing. Context-menu popovers are owned by the
+application tile and remain interactive.
 
 ### Application discovery and launching
 
@@ -172,13 +172,13 @@ write leaves the previous state untouched and displays the write error.
   session without launcher errors.
 - The rendered panel was inspected with a screenshot: it is nonblank, uses the
   Wayle-aligned palette, and is positioned at the top-left below the bar.
-- `hyprctl layers` showed one dismiss layer and one launcher panel at
-  `18,52` with a `392x493` compositor surface.
-- Calling the configured wrapper twice toggled the existing instance and did
-  not create duplicate launcher layers.
-- Changing the active window while the launcher was visible removed both
-  launcher layers, exercising the same close behavior used by the previous
-  working launcher.
+- `hyprctl layers -j` showed one `wayle-app-launcher` surface covering the full
+  `1920x1200` logical output.
+- An injected primary click inside the panel kept the launcher visible; a click
+  at `1000,900` outside the panel removed the launcher layer immediately while
+  the named AGS instance remained running.
+- Calling the configured wrapper after dismissal reopened the same instance at
+  the full output size and did not create a duplicate launcher layer.
 - The old Python launcher process was stopped before the single-instance test.
 - The dashboard configuration still points to the same wrapper and no Wayle
   source file is part of this implementation.

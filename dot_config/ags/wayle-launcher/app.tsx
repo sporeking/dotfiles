@@ -3,6 +3,7 @@ import { Astal, Gdk, Gtk } from "ags/gtk4"
 import Apps from "gi://AstalApps?version=0.1"
 import Gio from "gi://Gio?version=2.0"
 import GLib from "gi://GLib?version=2.0"
+import Graphene from "gi://Graphene?version=1.0"
 import Pango from "gi://Pango?version=1.0"
 
 const INSTANCE_NAME = "wayle-app-launcher"
@@ -179,7 +180,6 @@ function makeMenuButton(iconName: string, label: string): Gtk.Button {
 
 class LauncherController {
     readonly window: Astal.Window
-    readonly dismissWindow: Astal.Window
 
     private readonly apps: Apps.Apps
     private readonly catalog: Map<string, DesktopApplication>
@@ -206,41 +206,31 @@ class LauncherController {
             this.stateError = errorMessage(error)
         }
 
-        this.dismissWindow = new Astal.Window()
-        this.dismissWindow.name = "wayle-launcher-dismiss"
-        this.dismissWindow.namespace = "wayle-app-launcher-dismiss"
-        this.dismissWindow.layer = Astal.Layer.TOP
-        this.dismissWindow.exclusivity = Astal.Exclusivity.IGNORE
-        this.dismissWindow.keymode = Astal.Keymode.NONE
-        this.dismissWindow.anchor = Astal.WindowAnchor.TOP
-            | Astal.WindowAnchor.RIGHT
-            | Astal.WindowAnchor.BOTTOM
-            | Astal.WindowAnchor.LEFT
-
-        const dismissSurface = Gtk.Button.new()
-        dismissSurface.set_has_frame(false)
-        dismissSurface.add_css_class("launcher-dismiss-surface")
-        dismissSurface.hexpand = true
-        dismissSurface.vexpand = true
-        this.dismissWindow.set_child(dismissSurface)
-
-        const dismissGesture = new Gtk.GestureClick()
-        dismissGesture.set_button(0)
-        dismissGesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        dismissGesture.connect("pressed", () => this.hide())
-        dismissSurface.add_controller(dismissGesture)
-
         this.window = new Astal.Window()
         this.window.name = LAUNCHER_WINDOW_NAME
         this.window.namespace = "wayle-app-launcher"
         this.window.layer = Astal.Layer.OVERLAY
         this.window.exclusivity = Astal.Exclusivity.IGNORE
         this.window.keymode = Astal.Keymode.EXCLUSIVE
-        this.window.anchor = Astal.WindowAnchor.TOP | Astal.WindowAnchor.LEFT
-        this.window.marginTop = 52
-        this.window.marginLeft = 18
-        this.window.set_default_size(WIDTH, HEIGHT)
+        this.window.anchor = Astal.WindowAnchor.TOP
+            | Astal.WindowAnchor.RIGHT
+            | Astal.WindowAnchor.BOTTOM
+            | Astal.WindowAnchor.LEFT
+        // Astal.Window forces 1x1 requests; reset them so GTK measures the overlay normally.
+        this.window.set_size_request(0, 0)
         this.window.set_resizable(false)
+
+        const overlay = Gtk.Overlay.new()
+        this.window.set_child(overlay)
+
+        const dismissSurface = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 0,
+        })
+        dismissSurface.add_css_class("launcher-dismiss-surface")
+        dismissSurface.hexpand = true
+        dismissSurface.vexpand = true
+        overlay.set_child(dismissSurface)
 
         const panel = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
@@ -248,9 +238,25 @@ class LauncherController {
         })
         panel.add_css_class("launcher-panel")
         panel.set_size_request(WIDTH, HEIGHT)
-        panel.hexpand = true
-        panel.vexpand = true
-        this.window.set_child(panel)
+        panel.halign = Gtk.Align.START
+        panel.valign = Gtk.Align.START
+        panel.marginTop = 52
+        panel.marginStart = 18
+
+        const dismissGesture = new Gtk.GestureClick()
+        dismissGesture.set_button(0)
+        dismissGesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        dismissGesture.connect("pressed", (_, _pressCount, x, y) => {
+            const [hasBounds, bounds] = panel.compute_bounds(this.window)
+            if (!hasBounds) {
+                throw new Error("cannot compute launcher panel bounds")
+            }
+            const point = Graphene.Point.alloc().init(x, y)
+            if (!bounds.contains_point(point)) {
+                this.hide()
+            }
+        })
+        this.window.add_controller(dismissGesture)
 
         const header = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -354,6 +360,8 @@ class LauncherController {
         this.grid.add_css_class("launcher-grid")
         this.grid.hexpand = true
         scrolled.set_child(this.grid)
+        overlay.add_overlay(panel)
+        overlay.set_measure_overlay(panel, true)
 
         const keyController = new Gtk.EventControllerKey()
         keyController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
@@ -366,32 +374,34 @@ class LauncherController {
         })
         this.window.add_controller(keyController)
 
-        this.window.connect("notify::visible", () => {
-            if (this.window.visible) {
-                this.dismissWindow.visible = true
-                this.search.grab_focus()
-            } else {
-                this.dismissWindow.visible = false
-                this.closeContextMenu()
+        this.window.connect("map", () => {
+            const surface = this.window.get_surface()
+            if (!surface) {
+                throw new Error("launcher window was mapped without a GDK surface")
             }
+            const display = Gdk.Display.get_default()
+            if (!display) {
+                throw new Error("launcher window was mapped without a GDK display")
+            }
+            const monitor = display.get_monitor_at_surface(surface)
+            if (!monitor) {
+                throw new Error("cannot resolve the monitor containing the launcher")
+            }
+            const geometry = monitor.get_geometry()
+            if (geometry.width <= 0 || geometry.height <= 0) {
+                throw new Error(
+                    `launcher monitor has invalid geometry ${geometry.width}x${geometry.height}`,
+                )
+            }
+            this.window.set_size_request(geometry.width, geometry.height)
+            surface.set_input_region(null)
         })
 
-        this.window.connect("notify::is-active", () => {
-            if (
-                this.window.visible
-                && !this.window.is_active
-                && !this.contextMenu?.visible
-            ) {
-                GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-                    if (
-                        this.window.visible
-                        && !this.window.is_active
-                        && !this.contextMenu?.visible
-                    ) {
-                        this.hide()
-                    }
-                    return GLib.SOURCE_REMOVE
-                })
+        this.window.connect("notify::visible", () => {
+            if (this.window.visible) {
+                this.search.grab_focus()
+            } else {
+                this.closeContextMenu()
             }
         })
 
@@ -399,7 +409,6 @@ class LauncherController {
     }
 
     show(): void {
-        this.dismissWindow.visible = true
         this.window.visible = true
         this.search.grab_focus()
     }
@@ -407,7 +416,6 @@ class LauncherController {
     hide(): void {
         this.closeContextMenu()
         this.window.visible = false
-        this.dismissWindow.visible = false
     }
 
     private visibleApplications(): DesktopApplication[] {
@@ -638,7 +646,6 @@ app.start({
     css: CSS_PATH,
     main() {
         const controller = new LauncherController()
-        app.add_window(controller.dismissWindow)
         app.add_window(controller.window)
         controller.show()
     },

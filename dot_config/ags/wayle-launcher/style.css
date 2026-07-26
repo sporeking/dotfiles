@@ -9,23 +9,8 @@
 @define-color wayle-yellow #e0b870;
 @define-color wayle-error #f08d9b;
 
-window#wayle-launcher-dismiss {
-    background-color: transparent;
-}
-
 .launcher-dismiss-surface {
-    background-color: transparent;
-}
-
-button.launcher-dismiss-surface {
-    min-width: 1px;
-    min-height: 1px;
-    padding: 0;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
+    background-color: alpha(@wayle-bg, 0.18);
 }
 
 window#launcher {
