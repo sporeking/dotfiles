@@ -1,0 +1,225 @@
+@define-color wayle-bg #141420;
+@define-color wayle-surface #1c1c2c;
+@define-color wayle-elevated #242438;
+@define-color wayle-overlay #30304a;
+@define-color wayle-fg #d4d6e8;
+@define-color wayle-fg-muted #8a8ca4;
+@define-color wayle-fg-subtle #6f7188;
+@define-color wayle-primary #dc8add;
+@define-color wayle-yellow #e0b870;
+@define-color wayle-error #f08d9b;
+
+window#wayle-launcher-dismiss {
+    background-color: transparent;
+}
+
+.launcher-dismiss-surface {
+    background-color: transparent;
+}
+
+window#launcher {
+    background-color: transparent;
+    color: @wayle-fg;
+    font-family: "LXGW WenKai Mono", sans-serif;
+}
+
+.launcher-panel {
+    min-width: 380px;
+    min-height: 420px;
+    background-color: @wayle-surface;
+    border: 1px solid alpha(@wayle-fg-muted, 0.28);
+    border-radius: 8px;
+}
+
+.launcher-header {
+    min-height: 58px;
+    padding: 10px 14px 8px;
+    background-color: @wayle-elevated;
+    border-bottom: 1px solid alpha(@wayle-fg-muted, 0.22);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.launcher-title-row image {
+    color: @wayle-primary;
+    margin-right: 10px;
+}
+
+.launcher-title {
+    color: @wayle-fg;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.launcher-result-count {
+    color: @wayle-fg-muted;
+    font-family: "FiraCode Nerd Font Mono", "LXGW WenKai Mono", monospace;
+    font-size: 10px;
+    font-style: italic;
+}
+
+button.ghost-icon {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    color: @wayle-fg-muted;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+button.ghost-icon:hover,
+button.ghost-icon:focus-visible {
+    color: @wayle-fg;
+    background-color: alpha(@wayle-primary, 0.18);
+}
+
+.launcher-content {
+    min-height: 0;
+    padding: 12px;
+    color: @wayle-fg-muted;
+}
+
+.launcher-search {
+    min-height: 38px;
+    margin-bottom: 10px;
+    padding: 0 10px;
+    color: @wayle-fg;
+    caret-color: @wayle-primary;
+    background-color: @wayle-overlay;
+    border: 1px solid alpha(@wayle-fg-muted, 0.25);
+    border-radius: 6px;
+    font-family: "LXGW WenKai Mono", sans-serif;
+    font-size: 13px;
+}
+
+.launcher-search:focus-within {
+    border-color: alpha(@wayle-primary, 0.75);
+}
+
+.launcher-search placeholder {
+    color: @wayle-fg-muted;
+}
+
+.launcher-status {
+    min-height: 24px;
+    margin: 0 2px 8px;
+    color: @wayle-yellow;
+    font-family: "LXGW WenKai Mono", sans-serif;
+    font-size: 11px;
+}
+
+.launcher-status-error {
+    color: @wayle-error;
+}
+
+.launcher-scrolled {
+    min-height: 0;
+    background-color: transparent;
+}
+
+.launcher-scrolled undershoot,
+.launcher-scrolled overshoot {
+    background-color: transparent;
+}
+
+.launcher-grid {
+    padding: 2px;
+    background-color: transparent;
+}
+
+.launcher-grid > flowboxchild {
+    padding: 0;
+}
+
+button.quick-action.launcher-app {
+    min-width: 106px;
+    min-height: 96px;
+    padding: 6px;
+    color: @wayle-fg;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+button.quick-action.launcher-app .quick-action-icon {
+    min-width: 48px;
+    min-height: 48px;
+    padding: 8px;
+    background-color: @wayle-overlay;
+    border-radius: 8px;
+}
+
+button.quick-action.launcher-app .quick-action-icon image {
+    -gtk-icon-size: 32px;
+    color: @wayle-fg-muted;
+}
+
+button.quick-action.launcher-app .quick-action-label {
+    min-height: 28px;
+    margin-top: 7px;
+    color: @wayle-fg-muted;
+    font-family: "LXGW WenKai Mono", sans-serif;
+    font-size: 11px;
+}
+
+button.quick-action.launcher-app:hover,
+button.quick-action.launcher-app:focus-visible {
+    background-color: alpha(@wayle-primary, 0.12);
+}
+
+button.quick-action.launcher-app:hover .quick-action-icon,
+button.quick-action.launcher-app:focus-visible .quick-action-icon {
+    background-color: alpha(@wayle-primary, 0.26);
+}
+
+button.quick-action.launcher-app:hover .quick-action-icon image,
+button.quick-action.launcher-app:focus-visible .quick-action-icon image,
+button.quick-action.launcher-app:hover .quick-action-label,
+button.quick-action.launcher-app:focus-visible .quick-action-label {
+    color: @wayle-fg;
+}
+
+popover.launcher-context {
+    background-color: transparent;
+}
+
+popover.launcher-context > contents {
+    min-width: 170px;
+    padding: 4px;
+    background-color: @wayle-elevated;
+    border: 1px solid alpha(@wayle-fg-muted, 0.28);
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+.launcher-context-menu {
+    background-color: transparent;
+}
+
+button.launcher-menu-item {
+    min-height: 32px;
+    padding: 0 9px;
+    color: @wayle-fg-muted;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 4px;
+    box-shadow: none;
+    font-family: "LXGW WenKai Mono", sans-serif;
+    font-size: 12px;
+}
+
+button.launcher-menu-item:hover,
+button.launcher-menu-item:focus-visible {
+    color: @wayle-fg;
+    background-color: alpha(@wayle-primary, 0.18);
+}
+
+button.launcher-menu-item image {
+    color: @wayle-primary;
+}

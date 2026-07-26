@@ -2,41 +2,41 @@
 
 Date: 2026-07-26
 
-Status: Proposed
+Status: Implemented
 
 ## Context
 
-Wayle's dashboard already exposes a right-click action. The launcher should be
-opened from that action without modifying Wayle's upstream source, because a
-local source fork would create unnecessary merge conflicts. The launcher must
-behave like a compact application menu rather than replace the existing Rofi
-window/run shortcut.
+Wayle's dashboard already exposes a right-click action. The launcher is opened
+from that action without modifying Wayle's upstream source, because a local
+source fork would create unnecessary merge conflicts. The launcher is a
+standalone GTK4 application built with AGS and Astal Apps.
 
-Rofi 2.0 can enumerate applications, but its installed mouse bindings do not
-provide a right-click action that script mode can consume. Using it would make
-the requested add/remove-favorite interaction impossible to implement
-precisely. The launcher will therefore be a small standalone GTK4 application
-using `gtk4-layer-shell`.
+The UI is intentionally compact and aligned with the existing Wayle dashboard:
+it opens below the bar at the top-left, has no sidebar, starts in the fixed
+favorites view, and uses one icon button to switch between favorites and all
+applications.
 
 ## Goals
 
 - Open from the dashboard button's right-click action.
-- Show one compact panel with no left navigation sidebar.
+- Keep all launcher code and styling outside Wayle's source tree.
+- Show a compact top-left panel with no navigation sidebar.
 - Start in the fixed-favorites view.
-- Use one top-right toggle to switch between fixed favorites and all apps.
-- Search applications in either view.
+- Switch between fixed favorites and all applications with one top-right button.
+- Search applications by name, desktop-entry ID, description, and keywords.
 - Launch an application with a primary click.
 - Add an application to favorites with its secondary-click context menu.
 - Remove a favorite with the same secondary-click interaction.
 - Persist favorites using desktop-entry IDs, not display names or commands.
-- Keep all launcher code and styling outside Wayle's source tree.
-- Fail visibly when application metadata or state cannot be read or written;
-  do not silently omit entries or overwrite a corrupt state file.
+- Close on Escape or a click outside the panel.
+- Fail visibly when application metadata or favorite state cannot be read or
+  written; do not silently repair invalid state.
 
 ## Non-goals
 
 - Replacing the existing `Super+R` Rofi shortcut.
 - Editing or vendoring Wayle source code.
+- Registering a new Wayle module or dashboard dropdown.
 - Implementing an application installer, desktop-entry editor, or settings
   manager.
 - Guessing executable commands when a desktop entry cannot be launched.
@@ -45,70 +45,63 @@ using `gtk4-layer-shell`.
 
 ### Favorites view
 
-The panel opens with a search field below the header and a responsive grid of
-favorite applications. The top-right button is labeled `全部应用` and switches
-to the complete application list. The favorite grid also contains an
-`全部应用` entry so the same transition is discoverable without a sidebar.
+The panel opens with a search field below the header and a fixed three-column
+grid of favorite applications. The header contains the title, result count, and
+one icon button that switches to all applications.
 
-When no favorites have been configured, the grid shows the all-applications
-entry and an explicit empty-state message. The launcher does not invent a
-favorite list from installation order.
+On first use, the state file does not exist. The launcher seeds favorites from
+an explicit list of common desktop-entry IDs and keeps only entries that are
+actually present in the current application catalog. This first-run behavior
+is deterministic; once a state file exists, every ID is validated strictly.
 
 ### All applications view
 
-The top-right button changes to `固定收藏` and returns to the favorites view.
-The grid contains every launchable desktop application visible to the current
-user, sorted by localized display name and then desktop-entry ID. The search
-field filters the list by localized name, generic name, and desktop-entry ID.
+The top-right button changes to the favorites icon and returns to the fixed
+favorites view. The all-applications grid is populated from Astal Apps and is
+sorted by localized display name, with the desktop-entry ID as a deterministic
+tie-breaker. Typing in the search field uses Astal Apps fuzzy matching.
 
 ### Application actions
 
 - Primary click: launch through the desktop-entry API and close the launcher.
-- Secondary click on an unfavorited app: show a context menu with `加入固定收藏`.
-- Secondary click on a favorite: show a context menu with `移除固定收藏`.
-- The context menu also offers `打开` so the action is explicit and keyboard
-  accessible.
-- After a favorite mutation, the file is written atomically and the visible
-  grid is rebuilt from the new state.
+- Secondary click on an unfavorited app: show `加入固定收藏`.
+- Secondary click on a favorite: show `移除固定收藏`.
+- Both context menus also offer `打开`.
+- After a favorite mutation, the state file is replaced and the visible grid is
+  rebuilt from the new state.
 
-Escape closes the panel. Losing focus closes it after GTK has delivered the
-focus transition, except while a launcher context menu is open. A second
-invocation focuses the existing window instead of opening a duplicate.
+The Escape key hides the panel. A separate full-screen transparent layer-shell
+surface receives clicks outside the panel and hides it immediately. A second
+invocation toggles the existing AGS instance instead of creating a duplicate.
 
 ## Layout and visual treatment
 
-The launcher is a single rounded layer-shell panel anchored to the top-right
-of the output. It has a stable width and a height constrained to the available
-work area, with scrolling for long application lists. The header contains the
-title, result count, and one icon-plus-text view toggle. The search entry uses
-the existing Wayle font variables where possible, with the application name
-font falling back to the system UI font only when the requested font cannot be
-loaded.
+The launcher is a rounded layer-shell panel anchored to the top-left of the
+output, below the 35px Wayle bar. It has stable dimensions of 380x420 logical
+pixels and a scrollable content area for longer application lists. The header,
+search field, quick-action tiles, colors, spacing, and typography are defined
+in launcher-local CSS modeled on the current Wayle dashboard palette.
 
-Application tiles use the desktop-entry icon and localized name. The tile size
-is fixed so loading an icon or changing the result count cannot shift the grid.
-The implementation uses GTK widgets and CSS rather than embedding a browser or
-copying Wayle's internal styles.
+Application tiles use the desktop-entry icon and localized name. Tile sizes are
+fixed so loading an icon or changing the result count does not shift the grid.
 
 ## Technical design
 
 ### Entry point and integration
 
-The chezmoi source will contain:
+The chezmoi source contains:
 
-- `scripts/wayle-app-launcher/launcher`: executable entry-point wrapper.
-- `scripts/wayle-app-launcher/app.py`: GTK4 application and UI.
-- `scripts/wayle-app-launcher/launcher_core.py`: testable search and state logic.
-- `scripts/wayle-app-launcher/style.css`: launcher-only GTK CSS.
+- `dot_config/ags/wayle-launcher/app.tsx`: AGS GTK4 application and UI.
+- `dot_config/ags/wayle-launcher/style.css`: launcher-local GTK CSS.
+- `scripts/wayle-app-launcher/launcher`: executable toggle/start wrapper.
 
-The wrapper executes the application with the system Python interpreter and
-uses an absolute path derived from the wrapper location, so it does not depend
-on the caller's working directory or `PATH` beyond Python itself. It
-preloads `/usr/lib/libgtk4-layer-shell.so`, which is required by the installed
-GI binding because the layer-shell library interposes Wayland client symbols.
-If that required library is absent, the wrapper exits with an explicit error.
+The wrapper checks that the deployed AGS entry point exists, toggles the named
+`wayle-app-launcher` instance when it is already running, and otherwise starts
+it with GTK4. AGS and Astal provide the GTK4 and layer-shell integration; the
+launcher does not preload `libgtk4-layer-shell.so` or interpose Wayland client
+symbols.
 
-Wayle will receive only this configuration addition:
+Wayle receives only this existing dashboard configuration:
 
 ```toml
 [modules.dashboard]
@@ -116,25 +109,23 @@ border-show = true
 right-click = "/home/sporeking/scripts/wayle-app-launcher/launcher"
 ```
 
-The existing dashboard left-click action and existing Rofi key binding remain
-unchanged.
+The dashboard left-click action and existing Rofi key binding remain unchanged.
+No Wayle source file, module registration, or dropdown implementation is
+modified.
 
-The launcher window uses layer `overlay`, top/right anchors, and
-`KeyboardMode.EXCLUSIVE`. The search entry is explicitly focusable and is
-focused from an idle callback after the layer surface is mapped, so the first
-invocation is ready for typing.
+The launcher uses an `overlay` panel anchored to the top-left with exclusive
+keyboard input. A separate full-screen transparent `top` layer uses no keyboard
+input and is created before the panel, so the panel remains above it while
+outside pointer presses reach the dismiss surface. Context-menu popovers are
+owned by the application tile and remain interactive.
 
 ### Application discovery and launching
 
-The app uses `Gio.AppInfo.get_all()` and filters to applications that are
-visible and launchable for the current desktop session. It retains each
-application's desktop-entry ID as its identity and uses `Gio.AppInfo.launch()`
-to start it. No shell command is assembled from desktop-entry fields.
-
-The displayed name and icon come from `Gio.AppInfo`; sorting uses the
-localized display name with the ID as a deterministic tie-breaker. The same
-discovery result feeds both the favorites and all-applications views so the
-two views cannot disagree about launchability.
+Astal Apps enumerates visible desktop applications and provides the desktop
+entry ID, localized name, icon, metadata, fuzzy search, and launch operation.
+The launcher keeps the desktop-entry ID as the application identity and calls
+the Astal Apps launch API. No shell command is assembled from desktop-entry
+fields.
 
 ### Persistent favorites
 
@@ -152,37 +143,38 @@ entry IDs:
 }
 ```
 
-At startup, the file must be valid JSON, have the expected version, and contain
-unique string IDs. Each ID must resolve to a currently visible launchable
-desktop entry before it can be rendered as a favorite. A missing entry is a
-state error, not an instruction to silently rewrite the user's file.
+At startup, an existing file must be valid JSON, have the expected version,
+contain only the known fields, and contain unique IDs that resolve to visible,
+launchable desktop entries. An invalid file or unavailable ID is displayed as
+an explicit state error; it is not truncated, repaired, or silently rewritten.
 
-Writes use a temporary file in the same directory, flush and close it, then
-replace the destination with `os.replace()`. The parent directory is created
-only when the state file is first needed. A failed write leaves the previous
-state untouched and presents an error in the launcher.
+Writes validate the complete next state, create the parent directory when
+needed, and replace the destination using Gio's replacement API. A failed
+write leaves the previous state untouched and displays the write error.
 
 ## Error behavior
 
-- Discovery failure: show a visible error panel with the underlying exception
-  text and disable launching; do not show an empty list as if discovery
-  succeeded.
-- Invalid favorites file: show the file path and validation error; do not
-  truncate, repair, or silently reset it.
-- Favorite ID no longer available: show that ID in the error panel and require
-  the user to remove or correct the state file; do not silently drop it.
-- Launch failure: keep the launcher open and show the application ID plus the
-  launch error.
-- CSS or icon-load failure: keep the structural UI available and report the
-  failed resource in the visible error area. Missing icons use GTK's standard
-  missing-image representation rather than a hand-picked substitute.
+- Discovery failure: show a visible error message and do not present a false
+  empty result.
+- Invalid favorites file: show the path-derived state error and do not reset it.
+- Unavailable favorite ID: show the exact desktop-entry ID in the error.
+- Launch failure: keep the launcher open and show the entry ID plus the error.
+- Favorite write failure: keep the prior in-memory state and show the error.
 
 ## Verification
 
-The implementation will be verified with focused tests for desktop-entry
-identity, search matching, favorite validation, atomic persistence, and
-duplicate favorite rejection. A GTK smoke test will launch the app on the
-current Wayland session and verify the favorites/all-apps toggle, search,
-secondary-click menu, add/remove persistence, Escape close, and second-launch
-single-instance behavior. The deployed Wayle configuration will be checked
-with `wayle check` or the available Wayle validation command, then reloaded.
+- AGS GTK4 runtime compilation and startup completed on the current Wayland
+  session without launcher errors.
+- The rendered panel was inspected with a screenshot: it is nonblank, uses the
+  Wayle-aligned palette, and is positioned at the top-left below the bar.
+- `hyprctl layers` showed one dismiss layer and one launcher panel at
+  `18,52` with a `392x493` compositor surface.
+- Calling the configured wrapper twice toggled the existing instance and did
+  not create duplicate launcher layers.
+- The old Python launcher process was stopped before the single-instance test.
+- The dashboard configuration still points to the same wrapper and no Wayle
+  source file is part of this implementation.
+
+The context-menu add/remove flow and outside-click close are implemented by
+GTK gesture/popover handlers. They should receive a final manual interaction
+check after the dotfiles commit is applied to a fresh session.

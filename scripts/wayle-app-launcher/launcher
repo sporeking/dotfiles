@@ -1,17 +1,14 @@
 #!/bin/sh
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-
-layer_shell_lib=/usr/lib/libgtk4-layer-shell.so
-if [ ! -r "$layer_shell_lib" ]; then
-  printf '%s\n' "wayle-app-launcher: required library is missing: $layer_shell_lib" >&2
+app_file="${XDG_CONFIG_HOME:-$HOME/.config}/ags/wayle-launcher/app.tsx"
+if [ ! -r "$app_file" ]; then
+  printf '%s\n' "wayle-app-launcher: AGS entry point is missing: $app_file" >&2
   exit 1
 fi
-if [ -n "${LD_PRELOAD:-}" ]; then
-  export LD_PRELOAD="$layer_shell_lib:$LD_PRELOAD"
-else
-  export LD_PRELOAD="$layer_shell_lib"
+
+if /usr/bin/ags toggle launcher --instance wayle-app-launcher >/dev/null 2>&1; then
+  exit 0
 fi
 
-exec /usr/bin/python3 "$script_dir/app.py" "$@"
+exec /usr/bin/ags run "$app_file" --gtk 4
