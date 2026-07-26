@@ -1,8 +1,7 @@
 {
   "mcpServers": {
     "context-mode": {
-      "command": "npx",
-      "args": ["--no-install", "context-mode"]
+      "command": "/home/sporeking/.pi/agent/npm/node_modules/.bin/context-mode"
     }
   }
 }

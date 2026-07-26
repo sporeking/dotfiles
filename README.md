@@ -75,9 +75,9 @@ chezmoi 源目录在本机的路径是：
 │   ├── mako/config              # 旧通知守护（现多用 hyprpanel）
 │   └── waybar/                  # 旧状态栏配置（备用）
 ├── dot_pi/
-│   └── agent/                   # → ~/.pi/agent/，pi 模型、扩展、MCP 与 npm 锁文件
-├── private_dot_pi/
-│   └── agent/env                # → ~/.pi/agent/env，私有权限的空密钥模板
+│   └── agent/                   # → ~/.pi/agent/，Pi 配置与依赖
+│       ├── private_settings.json # → settings.json，保持 0600 权限
+│       └── private_env           # → env，保持 0600 的空密钥模板
 ├── dot_agents/
 │   ├── skills/                  # → ~/.agents/skills/，已安装的用户 skills
 │   └── .skill-lock.json         # → ~/.agents/.skill-lock.json

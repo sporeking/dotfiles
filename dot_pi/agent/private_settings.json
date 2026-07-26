@@ -1,0 +1,16 @@
+{
+  "lastChangelogVersion": "0.80.6",
+  "defaultProvider": "sporeking-grok",
+  "defaultModel": "grok-4.5",
+  "defaultThinkingLevel": "high",
+  "theme": "dark",
+  "packages": [
+    "npm:pi-web-access",
+    "npm:context-mode",
+    "npm:pi-autoresearch",
+    "npm:@mrclrchtr/supi-bash-timeout",
+    "npm:pi-rewind",
+    "npm:@tintinweb/pi-subagents",
+    "npm:pi-teams"
+  ]
+}

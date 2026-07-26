@@ -2,11 +2,12 @@
   "name": "pi-extensions",
   "private": true,
   "dependencies": {
-    "@mrclrchtr/supi-bash-timeout": "^2.3.0",
+    "@mrclrchtr/supi-bash-timeout": "^2.4.1",
+    "@tintinweb/pi-subagents": "^0.14.3",
     "context-mode": "^1.0.169",
     "pi-autoresearch": "^1.6.2",
     "pi-rewind": "^0.5.0",
-    "pi-subagents": "^0.34.0",
+    "pi-teams": "^0.9.14",
     "pi-web-access": "^0.13.0"
   }
 }
