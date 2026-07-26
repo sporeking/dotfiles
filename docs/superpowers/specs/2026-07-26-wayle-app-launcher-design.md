@@ -71,8 +71,11 @@ tie-breaker. Typing in the search field uses Astal Apps fuzzy matching.
   rebuilt from the new state.
 
 The Escape key hides the panel. A separate full-screen transparent layer-shell
-surface receives clicks outside the panel and hides it immediately. A second
-invocation toggles the existing AGS instance instead of creating a duplicate.
+surface receives clicks outside the panel and hides it immediately. The panel
+also observes its `is-active` state and closes when the compositor activates
+another window, covering the case where a pointer press is routed directly to
+that window. A second invocation toggles the existing AGS instance instead of
+creating a duplicate.
 
 ## Layout and visual treatment
 
@@ -116,8 +119,10 @@ modified.
 The launcher uses an `overlay` panel anchored to the top-left with exclusive
 keyboard input. A separate full-screen transparent `top` layer uses no keyboard
 input and is created before the panel, so the panel remains above it while
-outside pointer presses reach the dismiss surface. Context-menu popovers are
-owned by the application tile and remain interactive.
+outside pointer presses reach the dismiss surface. The panel also listens for
+`notify::is-active`; when focus moves to another compositor window it closes
+after an idle-cycle, unless a launcher context menu is open. Context-menu
+popovers are owned by the application tile and remain interactive.
 
 ### Application discovery and launching
 
@@ -171,10 +176,12 @@ write leaves the previous state untouched and displays the write error.
   `18,52` with a `392x493` compositor surface.
 - Calling the configured wrapper twice toggled the existing instance and did
   not create duplicate launcher layers.
+- Changing the active window while the launcher was visible removed both
+  launcher layers, exercising the same close behavior used by the previous
+  working launcher.
 - The old Python launcher process was stopped before the single-instance test.
 - The dashboard configuration still points to the same wrapper and no Wayle
   source file is part of this implementation.
 
-The context-menu add/remove flow and outside-click close are implemented by
-GTK gesture/popover handlers. They should receive a final manual interaction
-check after the dotfiles commit is applied to a fresh session.
+The context-menu add/remove flow remains implemented by GTK gesture/popover
+handlers and needs a final manual right-click check in the running desktop.

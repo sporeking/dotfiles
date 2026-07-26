@@ -217,7 +217,8 @@ class LauncherController {
             | Astal.WindowAnchor.BOTTOM
             | Astal.WindowAnchor.LEFT
 
-        const dismissSurface = new Gtk.Box()
+        const dismissSurface = Gtk.Button.new()
+        dismissSurface.set_has_frame(false)
         dismissSurface.add_css_class("launcher-dismiss-surface")
         dismissSurface.hexpand = true
         dismissSurface.vexpand = true
@@ -225,6 +226,7 @@ class LauncherController {
 
         const dismissGesture = new Gtk.GestureClick()
         dismissGesture.set_button(0)
+        dismissGesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         dismissGesture.connect("pressed", () => this.hide())
         dismissSurface.add_controller(dismissGesture)
 
@@ -354,6 +356,7 @@ class LauncherController {
         scrolled.set_child(this.grid)
 
         const keyController = new Gtk.EventControllerKey()
+        keyController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         keyController.connect("key-pressed", (_, keyval) => {
             if (keyval === Gdk.KEY_Escape) {
                 this.hide()
@@ -370,6 +373,25 @@ class LauncherController {
             } else {
                 this.dismissWindow.visible = false
                 this.closeContextMenu()
+            }
+        })
+
+        this.window.connect("notify::is-active", () => {
+            if (
+                this.window.visible
+                && !this.window.is_active
+                && !this.contextMenu?.visible
+            ) {
+                GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                    if (
+                        this.window.visible
+                        && !this.window.is_active
+                        && !this.contextMenu?.visible
+                    ) {
+                        this.hide()
+                    }
+                    return GLib.SOURCE_REMOVE
+                })
             }
         })
 
