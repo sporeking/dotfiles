@@ -77,7 +77,7 @@ chezmoi 源目录在本机的路径是：
 ├── dot_pi/
 │   └── agent/                   # → ~/.pi/agent/，Pi 配置与依赖
 │       ├── private_settings.json # → settings.json，保持 0600 权限
-│       └── private_env           # → env，保持 0600 的空密钥模板
+│       └── create_private_env    # → env，仅首次创建 0600 空密钥模板
 ├── dot_agents/
 │   ├── skills/                  # → ~/.agents/skills/，已安装的用户 skills
 │   └── .skill-lock.json         # → ~/.agents/.skill-lock.json
