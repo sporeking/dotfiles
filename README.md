@@ -62,7 +62,7 @@ chezmoi 源目录在本机的路径是：
 │   └── aau_token                # → ~/.conda/aau_token（机器相关，可忽略）
 ├── dot_config/
 │   ├── hypr/
-│   │   ├── hyprland.conf        # 主 WM 配置
+│   │   ├── hyprland.lua         # 主 WM 配置
 │   │   ├── hyprpaper.conf       # 壁纸
 │   │   ├── hypridle.conf        # 空闲 / 锁屏触发
 │   │   ├── hyprlock.conf        # 锁屏外观
@@ -127,7 +127,7 @@ chezmoi apply         # 写入 $HOME
 | 文件 | 要改什么 |
 |------|----------|
 | `~/.zshrc` | 填入 `ANTHROPIC_AUTH_TOKEN` 等密钥（仓库里是空字符串） |
-| `~/.config/hypr/hyprland.conf` | `monitor=` 行按实际显示器改 |
+| `~/.config/hypr/hyprland.lua` | `hl.monitor(...)` 按实际显示器改 |
 | `~/.config/hypr/hyprpaper.conf` | 壁纸路径（默认 `~/Pictures/nordic-wallpapers/...`） |
 | `~/scripts/*.sh` | 若用户名不是 `sporeking`，检查脚本内绝对路径 |
 | `~/.config/xremap/config.yml` | 键位重映射（**未**纳入本仓库，需自备） |
@@ -149,7 +149,7 @@ exec zsh              # 重载 shell
 
 ```bash
 # 1) 把当前 $HOME 里的 managed 文件写回源目录
-chezmoi re-add ~/.config/hypr/hyprland.conf
+chezmoi re-add ~/.config/hypr/hyprland.lua
 # 或一次 re-add 多个路径；也可以：
 chezmoi re-add ~/.zshrc ~/.config/kitty/kitty.conf
 
@@ -211,7 +211,7 @@ chezmoi re-add PATH          # 用目标文件覆盖源文件（同步“本机�
 
 ### Hyprland
 
-路径：`~/.config/hypr/hyprland.conf`（源：`dot_config/hypr/hyprland.conf`）
+路径：`~/.config/hypr/hyprland.lua`（源：`dot_config/hypr/hyprland.lua`）
 
 | 区块 | 说明 |
 |------|------|
@@ -416,7 +416,7 @@ ddcutil detect
 | `ALT+S` | 特殊工作区 magic |
 | `ALT+SHIFT+方向/HJKL` | 调整窗口大小 |
 | `ALT+F1/F2/F3` | 静音 / 音量- / 音量+ |
-| 鼠标侧键等 | 见 `hyprland.conf` bindm 段（移动/缩放/关闭） |
+| 鼠标侧键等 | 见 `hyprland.lua` 鼠标绑定段（移动/缩放/关闭） |
 
 Shell：
 
@@ -508,7 +508,7 @@ chezmoi apply ~/.config/hypr
 
 ### 显示器布局错乱
 
-编辑 `hyprland.conf` 的 `monitor=` 行。查当前输出：
+编辑 `hyprland.lua` 的 `hl.monitor(...)` 规则。查当前输出：
 
 ```bash
 hyprctl monitors

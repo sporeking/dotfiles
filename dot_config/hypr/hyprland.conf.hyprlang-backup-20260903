@@ -30,12 +30,14 @@
 # monitor=DP-3, 2560x1440@165, 0x0, 1.066667
 
 # monitor=HDMI-A-1, 1920x1080, 1920x0, 1
-# monitor=HDMI-A-1, 2560x1440@144, 0x0, 1.066667
+monitor=HDMI-A-1, 2560x1440@144, 0x0, 1.066667
 
 # monitor=eDP-1, 2560x1600@165, 2400x0 ,1.333333, transform, 1
 # monitor=eDP-2, 2560x1600@165, 2400x0 ,1.333333, transform, 1
-monitor=eDP-1, 2560x1600@165, 0x0 ,1.333333, transform, 0
-monitor=eDP-2, 2560x1600@165, 0x0 ,1.333333, transform, 0
+monitor=eDP-1, 2560x1600@165, 2400x0 ,1.6, transform, 1
+monitor=eDP-2, 2560x1600@165, 2400x0 ,1.6, transform, 1
+# monitor=eDP-1, 2560x1600@165, 0x0 ,1.333333, transform, 0
+# monitor=eDP-2, 2560x1600@165, 0x0 ,1.333333, transform, 0
 
 ###################
 ### MY PROGRAMS ###
@@ -231,6 +233,8 @@ master {
 misc { 
     force_default_wallpaper = -1 # Set to 0 or 1 to disable the anime mascot wallpapers
     disable_hyprland_logo = false # If true disables the random hyprland logo / anime girl background. :(
+    key_press_enables_dpms = true
+    mouse_move_enables_dpms = true
 }
 
 
@@ -376,6 +380,7 @@ bind = , mouse:275, killactive
 
 bind = SUPER, F5, exec, bash ~/scripts/turn_light.sh 3
 bind = SUPER, F6, exec, bash ~/scripts/turn_down_light.sh 3
+bind = SUPER, F10, exec, sleep 1 && hyprctl dispatch dpms off
 
 ##############################
 ### WINDOWS AND WORKSPACES ###
