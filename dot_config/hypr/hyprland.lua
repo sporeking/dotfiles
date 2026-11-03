@@ -319,3 +319,6 @@ local function configure_dynamic_cursors()
 end
 
 configure_dynamic_cursors()
+
+-- Dedicated translator: Alt+T, hidden startup, portable chezmoi deployment.
+dofile(home .. "/.local/share/nvim-translator/hyprland/translator.lua")

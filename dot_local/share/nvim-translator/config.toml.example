@@ -1,0 +1,30 @@
+# Copy to ~/.config/nvim-translator/config.toml (do not commit real API keys).
+# Youdao word/phrase lookup works independently of LLM configuration.
+[llm]
+# openai | openai-responses | anthropic | gemini
+protocol = "openai"
+# API root: the backend appends /chat/completions, /responses, /messages,
+# or /models/MODEL:generateContent. Do not append the final endpoint yourself.
+base_url = "https://api.openai.com/v1"
+# Set this explicitly before using sentence translation.
+model = ""
+api_key_env = "TRANSLATOR_API_KEY"
+# For desktop autostart, put [llm] api_key in config.local.toml (chmod 600).
+# Keep this public config free of credentials when syncing through dotfiles.
+timeout = 45
+
+# Example alternatives (replace the [llm] values above, do not duplicate sections):
+# protocol = "openai-responses"; base_url = "https://api.openai.com/v1"
+# protocol = "anthropic"; base_url = "https://api.anthropic.com/v1"
+# protocol = "gemini"; base_url = "https://generativelanguage.googleapis.com/v1beta"
+# Choose an available model on the configured service.
+
+[dictionary]
+enabled = true
+timeout = 8
+
+[ui]
+auto_pronounce = true
+accent = "us" # us | uk
+examples = true
+input_method = true # Fcitx5: English while editing; restore on hide

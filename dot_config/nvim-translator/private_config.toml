@@ -1,0 +1,19 @@
+# Public settings managed by chezmoi.
+# Credentials: TRANSLATOR_API_KEY or untracked config.local.toml.
+
+[llm]
+protocol = "openai"
+base_url = "https://api.openai.com/v1"
+model = ""
+api_key_env = "TRANSLATOR_API_KEY"
+timeout = 45
+
+[dictionary]
+enabled = true
+timeout = 8
+
+[ui]
+auto_pronounce = true
+accent = "us"
+examples = true
+input_method = true

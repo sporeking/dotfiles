@@ -1,0 +1,9 @@
+# Translator machine-local state and credentials are never managed.
+.config/nvim-translator/config.local.toml
+.local/share/nvim-translator/history.sqlite3*
+.local/share/nvim-translator/.runtime
+.local/share/nvim-translator/.runtime/**
+.local/share/nvim-translator/**/__pycache__
+.local/share/nvim-translator/**/__pycache__/**
+.local/share/nvim-translator/**/*.pyc
+.local/share/nvim-translator/**/nvim.log

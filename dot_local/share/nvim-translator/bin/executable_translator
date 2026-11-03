@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Dedicated Neovim translator window control (Hyprland 0.55+ Lua API)."""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parent.parent
+APP_ID = "nvim-translator"
+WORKSPACE = "special:translator"
+
+
+def runtime_dir() -> Path:
+    override = os.environ.get("TRANSLATOR_RUNTIME_DIR")
+    base = Path(os.environ.get("XDG_RUNTIME_DIR", f"/tmp/translator-{os.getuid()}"))
+    path = Path(override) if override else base / APP_ID
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.stat().st_uid != os.getuid():
+        raise RuntimeError("Translator runtime directory is not owned by this user")
+    path.chmod(0o700)
+    return path
+
+
+def run(args: list[str], *, timeout: float = 8) -> str:
+    result = subprocess.run(args, text=True, capture_output=True, timeout=timeout)
+    if result.returncode:
+        raise RuntimeError((result.stderr or result.stdout).strip() or f"{args[0]} failed")
+    return result.stdout.strip()
+
+
+def hypr_json(command: str):
+    return json.loads(run(["hyprctl", "-j", command]))
+
+
+def lua(code: str) -> None:
+    result = run(["hyprctl", "eval", code])
+    if result != "ok":
+        raise RuntimeError(result or "Hyprland returned no result")
+
+
+def clients() -> list[dict]:
+    return [c for c in hypr_json("clients") if c.get("class") == APP_ID]
+
+
+def visible() -> bool:
+    return any(m.get("specialWorkspace", {}).get("name") == WORKSPACE
+               for m in hypr_json("monitors"))
+
+
+def notify_nvim(method: str) -> bool:
+    socket = runtime_dir() / "nvim.sock"
+    if not socket.exists():
+        return False
+    expr = f"luaeval(\"require('translator').{method}()\")"
+    try:
+        result = run(["nvim", "--headless", "--server", str(socket), "--remote-expr", expr], timeout=7)
+        return result == "1"
+    except (RuntimeError, subprocess.TimeoutExpired):
+        return False
+
+
+def configure_rule() -> None:
+    # A specific app-id prevents any ordinary Kitty or Neovim being matched.
+    lua('if not _G.__nvim_translator_rule then '
+        '_G.__nvim_translator_rule = hl.window_rule({'
+        'name="nvim-translator",match={class="^nvim-translator$"},'
+        'float=true,workspace="special:translator silent",'
+        'size={900,600},center=true}) end')
+
+
+def isolated_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.update({"NVIM_APPNAME": APP_ID, "TRANSLATOR_ROOT": str(ROOT),
+                "TRANSLATOR_CTL": str(ROOT / "bin" / "translator"),
+                "PYTHONPATH": str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")})
+    for key in ("NVIM", "NVIM_LISTEN_ADDRESS", "VIMINIT", "EXINIT", "GVIMINIT"):
+        env.pop(key, None)
+    return env
+
+
+def ensure_started() -> None:
+    existing = clients()
+    if existing:
+        if len(existing) != 1:
+            raise RuntimeError("Multiple translator windows found; close duplicates first")
+        return
+    for program in ("nvim", "kitty", "python3", "hyprctl"):
+        if shutil.which(program) is None:
+            raise RuntimeError(f"Required program not found: {program}")
+    configure_rule()
+    runtime = runtime_dir()
+    socket = runtime / "nvim.sock"
+    if socket.exists():
+        # Never unlink a live unrelated server. A failed dedicated socket is stale.
+        try:
+            run(["nvim", "--headless", "--server", str(socket), "--remote-expr", "1"], timeout=2)
+        except (RuntimeError, subprocess.TimeoutExpired):
+            socket.unlink()
+        else:
+            raise RuntimeError("Translator Neovim is alive but its window is missing; run stop first")
+    command = ["kitty", "--class", APP_ID, "--title", "Translator", "--config", "NONE",
+               "--override", "font_size=13", "--override", "enable_audio_bell=no",
+               "--override", "confirm_os_window_close=0",
+               "--override", "shell_integration=disabled",
+               "--override", "background=#161b22", "--override", "foreground=#e6edf3",
+               "nvim", "-n", "--listen", str(socket), "-u", str(ROOT / "nvim" / "init.lua")]
+    env = isolated_env()
+    env["NVIM_LOG_FILE"] = str(runtime / "nvim.log")
+    with (runtime / "window.log").open("a") as log:
+        proc = subprocess.Popen(command, env=env, cwd=ROOT,
+                                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                start_new_session=True)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"Kitty exited during startup; inspect {runtime / 'window.log'}")
+        if clients() and socket.exists():
+            # The UI's setup is synchronous; its RPC becomes ready after setup.
+            if notify_nvim("before_hide"):
+                return
+        time.sleep(0.1)
+    raise RuntimeError(f"Translator startup timed out; inspect {runtime / 'window.log'}")
+
+
+def hide() -> None:
+    if not clients():
+        return
+    if not notify_nvim("before_hide"):
+        raise RuntimeError("Neovim did not acknowledge state save; window kept open")
+    if visible():
+        lua('hl.dispatch(hl.dsp.workspace.toggle_special("translator"))')
+
+
+def show() -> None:
+    ensure_started()
+    if not visible():
+        if not notify_nvim("on_show"):
+            raise RuntimeError("Translator UI is not responding")
+        lua('hl.dispatch(hl.dsp.workspace.toggle_special("translator"))')
+    # Native focus selector is app-specific; no ordinary Kitty is involved.
+    lua('hl.dispatch(hl.dsp.focus({window="class:^nvim-translator$"}))')
+
+
+def stop() -> None:
+    if not clients():
+        return
+    hide()
+    run(["nvim", "--headless", "--server", str(runtime_dir() / "nvim.sock"),
+         "--remote-send", "<C-\\><C-N>:qa!<CR>"])
+    # Sending :qa! only queues input. Wait for the window to disappear so a
+    # following show/start cannot mistake the exiting instance for a live UI.
+    deadline = time.monotonic() + 5
+    while clients():
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Translator did not finish shutting down")
+        time.sleep(0.05)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", nargs="?", default="toggle",
+                        choices=["start", "toggle", "show", "hide", "status", "stop", "config"])
+    args = parser.parse_args()
+    if args.action == "config":
+        invocation = shlex.join([sys.executable, str(ROOT / "bin" / "translator")])
+        print('-- Add this to your Hyprland Lua config (or dofile the project fragment):')
+        print(f'hl.bind("ALT + T", hl.dsp.exec_cmd({json.dumps(invocation + " toggle")}))')
+        print('hl.on("hyprland.start", function()')
+        print(f'  hl.exec_cmd({json.dumps(invocation + " start")})')
+        print('end)')
+        return 0
+    with (runtime_dir() / "control.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if args.action == "status":
+            print(json.dumps({"running": bool(clients()), "visible": visible(),
+                              "socket": str(runtime_dir() / "nvim.sock")}, ensure_ascii=False))
+        elif args.action == "start":
+            ensure_started()
+        elif args.action == "show":
+            show()
+        elif args.action == "hide":
+            hide()
+        elif args.action == "toggle":
+            hide() if visible() else show()
+        elif args.action == "stop":
+            stop()
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
+        print(f"translator: {error}", file=sys.stderr)
+        raise SystemExit(1)

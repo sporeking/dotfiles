@@ -20,6 +20,7 @@ Linux (Hyprland) 下的个人配置仓库，用 **[chezmoi](https://www.chezmoi.
   - [Zsh](#zsh)
   - [Kitty](#kitty)
   - [Neovim (LazyVim)](#neovim-lazyvim)
+  - [悬浮翻译器](#悬浮翻译器)
   - [Rofi / Tofi / Mako / Waybar](#rofi--tofi--mako--waybar)
   - [Scripts](#scripts)
 - [常用快捷键](#常用快捷键)
@@ -358,6 +359,25 @@ source ~/.zshrc
 :Copilot auth
 ```
 
+### 悬浮翻译器
+
+`Alt+T` 调出独立的 Neovim 翻译窗口，`:q` 保存并隐藏。登录后隐藏启动，支持 Vim 单行编辑、`j/k` 历史、联网英汉词典、四种 LLM 协议和发音；与日常 Neovim 配置隔离。
+
+- 程序：`~/.local/share/nvim-translator/`（源：`dot_local/share/nvim-translator/`）。
+- 入口：`~/.local/bin/translator`；可用 `show / hide / start / stop / status`。
+- 公开配置：`~/.config/nvim-translator/config.toml`，同步接口、模型和界面设置。
+- 密钥：环境变量 `TRANSLATOR_API_KEY`，或本机 `config.local.toml` 的 `[llm] api_key`；私有文件设为 600，不同步。
+- 历史和草稿：本机 SQLite，不同步；`.chezmoiignore` 和 `.gitignore` 排除运行数据及私有覆盖。
+
+新机器完成 `chezmoi init --apply` 后，安装 Python 3.11+、Neovim 0.11+、Kitty、mpv 和使用 Lua 配置的 Hyprland（本机验证 0.57），运行 `hyprctl reload config-only`，再按 `Alt+T`。接口和模型可同步，密钥需在各机器本地填写；不需要额外 Python 包。完整用法见 [翻译器说明](dot_local/share/nvim-translator/README.md)。
+
+继续开发时，在翻译器开发目录运行 `python3 scripts/sync-dotfiles.py`，再审查、提交 dotfiles。公开配置也可通过 `chezmoi re-add ~/.config/nvim-translator/config.toml` 更新；不要 re-add 私有覆盖。应用新程序后重启专用实例：
+
+```sh
+~/.local/bin/translator stop
+~/.local/bin/translator start
+```
+
 ### Rofi / Tofi / Mako / Waybar
 
 | 组件 | 状态 | 路径 |
@@ -406,6 +426,7 @@ ddcutil detect
 | `ALT+M` | 退出 Hyprland |
 | `ALT+X` | 切换浮动 |
 | `ALT+R` | Rofi 启动器 |
+| `ALT+T` | 显示 / 隐藏独立翻译器 |
 | `ALT+E` | 区域截图到剪贴板（hyprshot） |
 | `F12` | 窗口截图 |
 | `ALT+F12` | 输出（整屏）截图 |
@@ -469,8 +490,8 @@ kitty zsh starship zoxide fzf ripgrep bat
 rofi-wayland   # hyprpanel 请按你安装方式（AUR/自编译）
 # 输入法
 fcitx5 fcitx5-rime fcitx5-configtool
-# 编辑器
-neovim git
+# 编辑器 / 翻译器
+neovim git python mpv
 # 工具
 chezmoi ddcutil playerctl brightnessctl xorg-xbacklight
 # 可选

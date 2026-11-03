@@ -1,0 +1,8 @@
+# Chezmoi source names for translator machine-local files.
+dot_config/nvim-translator/*config.local.toml
+dot_local/share/nvim-translator/.runtime/
+dot_local/share/nvim-translator/**/__pycache__/
+dot_local/share/nvim-translator/**/*.py[cod]
+dot_local/share/nvim-translator/*.sqlite3*
+dot_local/share/nvim-translator/**/nvim.log
+.agents/
