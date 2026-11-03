@@ -14,6 +14,7 @@ Linux (Hyprland) 下的个人配置仓库，用 **[chezmoi](https://www.chezmoi.
 - [快速开始](#快速开始)
 - [日常同步工作流](#日常同步工作流)
 - [chezmoi 约定](#chezmoi-约定)
+- [自维护组件](#自维护组件)
 - [组件说明](#组件说明)
   - [Hyprland](#hyprland)
   - [Hyprpanel / 壁纸 / 锁屏](#hyprpanel--壁纸--锁屏)
@@ -208,6 +209,14 @@ chezmoi re-add PATH          # 用目标文件覆盖源文件（同步“本机�
 
 ---
 
+## 自维护组件
+
+本仓库自维护的插件和桌面工具，统一记录**目的、使用方法、实现方式**。新增组件时在这里登记，修改入口或行为时同步更新对应说明；维护约定见 [AGENTS.md](AGENTS.md)。
+
+| 组件 | 目的 | 使用方法 | 实现方式 |
+| --- | --- | --- | --- |
+| 悬浮翻译器 | [阅读英文时随时查词、翻译](dot_local/share/nvim-translator/README.md#目的) | [安装、配置与 Vim 按键](dot_local/share/nvim-translator/README.md#使用方法) | [调用流程与源码分工](dot_local/share/nvim-translator/README.md#实现方式) |
+
 ## 组件说明
 
 ### Hyprland
@@ -361,7 +370,11 @@ source ~/.zshrc
 
 ### 悬浮翻译器
 
-`Alt+T` 调出独立的 Neovim 翻译窗口，`:q` 保存并隐藏。登录后隐藏启动，支持 Vim 单行编辑、`j/k` 历史、联网英汉词典、四种 LLM 协议和发音；与日常 Neovim 配置隔离。
+**目的**：阅读英文资料时随时查词、翻译和听发音，保留 Vim 编辑方式与查询历史。
+
+**使用方法**：`Alt+T` 调出，`i` 编辑，`Ctrl+C` 查询，`j/k` 翻历史，`:q` 保存并隐藏；登录后隐藏启动。
+
+**实现方式**：Hyprland 管理专用浮动工作区，Python 启动器控制独立 Kitty / Neovim 界面，Python 后端接入有道词典和四种 LLM 协议，SQLite 保存查询与界面状态。详见[调用流程和源码入口](dot_local/share/nvim-translator/README.md#实现方式)。
 
 - 程序：`~/.local/share/nvim-translator/`（源：`dot_local/share/nvim-translator/`）。
 - 入口：`~/.local/bin/translator`；可用 `show / hide / start / stop / status`。

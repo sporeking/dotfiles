@@ -2,7 +2,17 @@
 
 在 Hyprland 上使用的键盘翻译器。独立 Kitty 窗口内运行专用 Neovim：登录后隐藏启动，`Alt+T` 调出，`:q` 保存并隐藏。窗口不参与平铺，普通终端和其他 Neovim 不加载本项目配置。
 
-## 环境
+[目的](#目的) · [使用方法](#使用方法) · [实现方式](#实现方式) · [验证](#验证)
+
+## 目的
+
+阅读英文资料时，用快捷键随时查询词义或翻译句子，再回到原来的工作窗口。输入区使用真实的 Vim 编辑能力，支持直接修改英文、查看词典义项和例句、听发音，以及回看历史。
+
+这个组件由本仓库维护，使用独立的 Kitty 和 Neovim 实例承载界面；与日常编辑器分别保存配置和状态。下面先说明使用方法，再说明各部分如何配合。
+
+## 使用方法
+
+### 环境
 
 - Hyprland 的 Lua 配置接口（本机 0.57），Kitty。
 - Neovim 0.11+（使用 `vim.system`、`vim.fs`），Python 3.11+。
@@ -11,7 +21,7 @@
 
 当前桌面集成针对 Hyprland Lua API，不兼容旧版 `hyprland.conf` 的 hyprlang 调度命令。
 
-## 启动与桌面接入
+### 启动与桌面接入
 
 在项目目录运行：
 
@@ -34,7 +44,7 @@ dofile("/absolute/path/to/translator/hyprland/translator.lua")
 
 每次启动都会安装仅匹配 `nvim-translator` app-id 的浮动规则：900×600、居中、静默放入 `special:translator`。调出会取得键盘焦点，隐藏后交还原桌面。跨屏时特殊工作区的显示遵循 Hyprland 的原生行为。
 
-## 通过 dotfiles 同步
+### 通过 dotfiles 同步
 
 chezmoi 部署版本的程序位于 `~/.local/share/nvim-translator/`，入口为 `~/.local/bin/translator`。Hyprland 配置加载该目录中的 Lua 片段，因此另一台机器无需存在原开发目录。
 
@@ -48,7 +58,7 @@ python3 scripts/sync-dotfiles.py
 
 后续修改公开设置可用 `chezmoi re-add ~/.config/nvim-translator/config.toml`；`config.local.toml` 保持本机私有，不要 re-add。
 
-## LLM 配置
+### LLM 配置
 
 复制示例配置：
 
@@ -78,7 +88,7 @@ api_key = "在本机填写"
 
 将私有文件权限设为 600。后端按字段合并 `config.toml` 和 `config.local.toml`，环境变量凭据优先；自定义 `foo.toml` 对应 `foo.local.toml`。dotfiles 只管理公开文件，私有覆盖被忽略。修改进程环境后重启翻译器；后端每次请求都会读取配置。修改 `[ui]` 的发音、例句或输入法设置后，用 `stop` 再 `start` 重启使界面设置生效。不要把真实密钥写入公开配置、项目示例或提交到仓库。
 
-## 操作
+### 操作
 
 焦点固定在上方输入行，下方显示结果。输入在逻辑上保持一行，长句横向滚动，多行粘贴合并为空格。
 
@@ -97,7 +107,7 @@ api_key = "在本机填写"
 
 新查询的词典词条默认自动发音一次。翻历史、窗口重开、命中历史缓存时不自动播放；句子不自动朗读。`[ui]` 可设置 `auto_pronounce`、`accent="us"/"uk"`、`examples`、`input_method`。
 
-## 词典与历史
+### 词典与历史
 
 在线词典使用有道公开网页 JSON 接口，保留词条返回的全部中文释义、词性、音标及可获取的双语例句。没有例句时不编造；“全部”指该接口实际返回的义项，不承诺覆盖所有词典和专业领域。该接口不是带可用性承诺的商业 API，接口变化或联网失败会显示错误。
 
@@ -112,6 +122,41 @@ api_key = "在本机填写"
 - socket、启动锁和 Kitty 日志：`$XDG_RUNTIME_DIR/nvim-translator/`。
 
 可用 `TRANSLATOR_CONFIG`、`TRANSLATOR_DB`、`TRANSLATOR_RUNTIME_DIR` 覆盖各路径。日志不记录 API 密钥。专用实例设置 `NVIM_APPNAME=nvim-translator`，不使用普通 Neovim 的配置、socket、ShaDa 或交换文件。
+
+## 实现方式
+
+### 调用流程
+
+```mermaid
+flowchart TD
+    H["Hyprland：登录 / Alt+T"] --> C["Python 启动器"]
+    C -->|"创建窗口"| N["Kitty + 专用 Neovim"]
+    C <-->|"headless RPC / 显示与隐藏"| N
+    N <-->|"stdin / stdout JSON"| P["Python 后端：一次请求一个进程"]
+    P --> D["有道词典 / 配置的 LLM 服务"]
+    P <--> S["SQLite：成功查询与界面状态"]
+    N -->|"新词条自动发音 / p 重播"| A["mpv"]
+```
+
+启动器按专用 app-id 查找或创建浮动窗口，将其放在 `special:translator` 工作区。Neovim 使用独立的 `NVIM_APPNAME`、初始化入口和 socket；启动器用 headless RPC 通知它准备显示或保存状态，再切换工作区。`:q` 保存并隐藏，`stop` 会结束实例并等待窗口退出。
+
+Neovim 上方的可编辑缓冲区接收原生 Vim 操作，下方的只读缓冲区显示结果。查询通过 `vim.system` 异步启动 Python 后端，每次向 stdin 写一个 JSON 请求，从 stdout 读一个 JSON 响应；后端完成请求后退出。请求代次和缓冲区变更检查可防止旧响应覆盖新输入。`j/k` 读取已加载的历史记录，编辑中的草稿单独保存。
+
+后端先检查成功查询缓存；明确的句子走 LLM，其他输入先查有道词典，词典真实未命中时再尝试 LLM。网络失败直接报错。成功结果与草稿、光标、结果滚动位置写入 SQLite，失败查询不进入成功历史。配置按公开 TOML、私有覆盖、环境变量凭据的顺序读取。
+
+### 源码分工
+
+| 部分 | 源码入口 | 负责的事情 |
+| --- | --- | --- |
+| 桌面接入 | [Hyprland 配置片段](hyprland/translator.lua) | `Alt+T` 和登录后隐藏启动 |
+| 窗口与进程控制 | [启动器目录](bin/) | 创建 Kitty / Neovim、安装浮动规则、RPC、显示 / 隐藏 / 退出 |
+| Vim 界面 | [初始化入口](nvim/init.lua)、[界面模块](nvim/lua/translator/init.lua) | 两个缓冲区、按键、异步查询、历史、状态保存、输入法与发音 |
+| 请求分发 | [后端进程入口](translator_backend/__main__.py)、[应用层](translator_backend/app.py) | JSON 请求 / 响应、缓存查询、错误处理 |
+| 翻译来源 | [词典](translator_backend/dictionary.py)、[LLM](translator_backend/llm.py) | 有道释义 / 例句 / 发音地址与四种 LLM 协议适配 |
+| 配置与数据 | [配置读取](translator_backend/config.py)、[SQLite 存储](translator_backend/storage.py) | 字段校验、私有覆盖、成功查询历史和独立界面状态 |
+| dotfiles 同步 | [同步脚本](scripts/sync-dotfiles.py) | 按文件清单复制代码和公开设置，生成 chezmoi 入口与配置 |
+
+完整的后端请求、返回值和持久化字段见 [内部接口约定](INTERFACE.md)。chezmoi 源目录通过 `executable_`、`private_` 前缀编码安装权限；程序按前文的用户目录布局安装，密钥和运行数据仍由各机器本地保存。
 
 ## 验证
 

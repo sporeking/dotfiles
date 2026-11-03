@@ -1,3 +1,6 @@
+# Repository guidance is for this checkout, not the user's home directory.
+AGENTS.md
+
 # Translator machine-local state and credentials are never managed.
 .config/nvim-translator/config.local.toml
 .local/share/nvim-translator/history.sqlite3*
