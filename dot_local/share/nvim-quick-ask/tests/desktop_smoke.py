@@ -20,7 +20,7 @@ if not LIVE:
 import json,sys,time
 q=sys.stdin.read().strip()
 web='--extension' in sys.argv
-answer='这是隔离桌面测试的模拟回答。' + ('web fixture' if web else 'only-answer-needle')
+answer='这是隔离桌面测试的模拟回答。' + ('web fixture' if web else '只在答案中的关键词')
 def emit(value): print(json.dumps(value,ensure_ascii=False),flush=True)
 if web:
     emit({'type':'tool_execution_start','toolName':'web_search'})
@@ -115,8 +115,8 @@ try:
         if web: assert s['entries'][0]['sources'], 'Web answer needs actual source results'
     print('PASS: ordinary/web answers, streamed results and persisted sources' + (' (LIVE)' if LIVE else ' (FAKE PI)'), flush=True)
     rpc("return vim.api.nvim_input('/')")
-    term = 'HTTP是什么' if LIVE else 'only-answer-needle'
-    rpc('return vim.api.nvim_input(' + json.dumps(term + '\r') + ')')
+    term = 'HTTP是什么' if LIVE else '只在答案中的关键词'
+    rpc('return vim.api.nvim_input(' + json.dumps('<C-U>' + term + '<CR>', ensure_ascii=False) + ')')
     wait_for(lambda: state()['search_count'] == 1, 'full-history search')
     rpc("return vim.api.nvim_input('<CR>')")
     wait_for(lambda: state()['draft'] == questions[0][0] and state()['search_count'] == -1, 'history selection')
