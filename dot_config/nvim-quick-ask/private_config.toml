@@ -1,0 +1,12 @@
+# Public quick-ask settings. Pi owns model credentials; none are copied here.
+
+[pi]
+command = "pi"
+provider = ""
+model = ""
+thinking = "off"
+timeout = 180
+web_extension = ""
+
+[ui]
+input_method = true

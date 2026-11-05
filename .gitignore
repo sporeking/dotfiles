@@ -6,3 +6,11 @@ dot_local/share/nvim-translator/**/*.py[cod]
 dot_local/share/nvim-translator/*.sqlite3*
 dot_local/share/nvim-translator/**/nvim.log
 .agents/
+
+# Quick Ask keeps Pi credentials and question history local.
+dot_config/nvim-quick-ask/*config.local.toml
+dot_local/share/nvim-quick-ask/.runtime/
+dot_local/share/nvim-quick-ask/**/__pycache__/
+dot_local/share/nvim-quick-ask/**/*.py[cod]
+dot_local/share/nvim-quick-ask/*.sqlite3*
+dot_local/share/nvim-quick-ask/**/nvim.log

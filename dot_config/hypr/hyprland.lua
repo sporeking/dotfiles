@@ -322,3 +322,6 @@ configure_dynamic_cursors()
 
 -- Dedicated translator: Alt+T, hidden startup, portable chezmoi deployment.
 dofile(home .. "/.local/share/nvim-translator/hyprland/translator.lua")
+
+-- Dedicated quick questions: Alt+A, Pi backend, searchable local history.
+dofile(home .. "/.local/share/nvim-quick-ask/hyprland/quick-ask.lua")

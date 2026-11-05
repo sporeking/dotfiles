@@ -10,3 +10,13 @@ AGENTS.md
 .local/share/nvim-translator/**/__pycache__/**
 .local/share/nvim-translator/**/*.pyc
 .local/share/nvim-translator/**/nvim.log
+
+# Quick Ask machine-local question history, logs and caches are unmanaged.
+.config/nvim-quick-ask/config.local.toml
+.local/share/nvim-quick-ask/history.sqlite3*
+.local/share/nvim-quick-ask/.runtime
+.local/share/nvim-quick-ask/.runtime/**
+.local/share/nvim-quick-ask/**/__pycache__
+.local/share/nvim-quick-ask/**/__pycache__/**
+.local/share/nvim-quick-ask/**/*.pyc
+.local/share/nvim-quick-ask/**/nvim.log

@@ -1,0 +1,13 @@
+# Pi supplies the model service and credentials from its own configuration.
+# Keep provider/model empty to inherit the current Pi defaults.
+[pi]
+command = "pi"
+provider = ""
+model = ""
+thinking = "off"
+timeout = 180
+# Empty: locate the installed pi-web-access package automatically.
+web_extension = ""
+
+[ui]
+input_method = true
