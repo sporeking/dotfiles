@@ -1,18 +1,7 @@
-# Pi supplies the model service and credentials from its own configuration.
-# Keep provider/model empty to inherit the current Pi defaults.
+# Native Pi owns models, thinking level, extensions, tools and credentials.
 [pi]
 command = "pi"
-provider = ""
-model = ""
-thinking = "off"
-timeout = 180
-# Empty: locate the installed pi-web-access package automatically.
-web_extension = ""
 
-# Default starting directory for NEW conversations. This is not a sandbox.
-# Commands and file tools run with your normal user's permissions.
+# Initial directory only; commands use your normal account permissions, no sandbox.
 [agent]
 workspace = "~/agent-workspace"
-
-[ui]
-input_method = true

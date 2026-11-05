@@ -217,7 +217,7 @@ chezmoi re-add PATH          # 用目标文件覆盖源文件（同步“本机�
 | 组件 | 目的 | 使用方法 | 实现方式 |
 | --- | --- | --- | --- |
 | 悬浮翻译器 | [读写英文时查词、双向翻译](dot_local/share/nvim-translator/README.md#目的) | [安装、配置与 Vim 按键](dot_local/share/nvim-translator/README.md#使用方法) | [调用流程与源码分工](dot_local/share/nvim-translator/README.md#实现方式) |
-| 悬浮 Agent | [多轮文件与命令助手](dot_local/share/nvim-quick-ask/README.md#目的) | [Alt+A、Vim 编辑与会话历史](dot_local/share/nvim-quick-ask/README.md#使用方法) | [Pi RPC、原生会话与 SQLite](dot_local/share/nvim-quick-ask/README.md#实现方式与数据) |
+| 悬浮 Pi | [多轮文件与命令助手](dot_local/share/nvim-quick-ask/README.md#目的) | [Alt+A、Vim 浏览与原生会话](dot_local/share/nvim-quick-ask/README.md#使用方法) | [原生 Pi、专用终端与轻量键位扩展](dot_local/share/nvim-quick-ask/README.md#实现方式) |
 
 ## 组件说明
 
@@ -397,9 +397,9 @@ source ~/.zshrc
 
 **目的**：用小窗口处理文件、执行命令并连续追问。默认工作目录为 `~/agent-workspace`，它只是起点，不是沙箱；工具使用普通用户权限。
 
-**使用方法**：`Alt+A` 调出，`i` 编辑多行消息，`Enter` 继续会话，执行中 Enter 排队下一条；`Ctrl+C` 取消任务及队列。`:NewChat` 新建会话，Normal `/` 搜索会话和旧问答，列表 `j/k`、`Enter`、`Esc` 选择/恢复/返回。`:q` 保存并隐藏，任务继续；`:qa!` 停止并退出。空闲时 `Tab` 切换专用网页搜索工具。先在 Pi 中配置模型与认证，搜索另需 `npm:pi-web-access`。
+**使用方法**：`Alt+A` 显示/隐藏 Pi 原生界面，隐藏后任务继续。启动即能输入；`Esc` 进入 Normal，`j/k` 滚动对话、`Ctrl+U/D` 翻半页、`gg/G` 跳到开头/底部、`/` 搜索对话，`i` 回到底部继续输入。Normal 再按 Esc 保留 Pi 原生取消操作。在 Insert 用 `/new`、`/resume`、`/model` 管理会话与模型，`/quit` 退出。模型、扩展、工具与认证直接使用 Pi 的现有配置。
 
-**实现方式**：独立 Kitty / Neovim 窗口保留双屏定位；Python 维护持续的 Pi RPC 会话，原生工具完成读写文件和命令执行。Pi 保存 JSONL 会话，SQLite 保存草稿、旧问答和完整历史索引；可恢复多轮上下文并显示工具进度。配置、实现和验证见 [组件说明](dot_local/share/nvim-quick-ask/README.md)。
+**实现方式**：Kitty 专用悬浮终端直接启动 Pi，保留双屏定位和焦点管理；小型扩展仅在原生 CustomEditor 上添加 Vim 浏览键位，调用 Pi 自带滚动和搜索接口。原生 JSONL 会话继续使用并在重启后恢复；旧单轮问答 SQLite 原样归档。自制 Neovim 对话界面、Python RPC 后端和历史索引已退役。配置、实现和验证见 [组件说明](dot_local/share/nvim-quick-ask/README.md)。
 
 程序源在 `dot_local/share/nvim-quick-ask/`，应用至 `~/.local/share/nvim-quick-ask/`；入口 `~/.local/bin/quick-ask`，公开配置 `~/.config/nvim-quick-ask/config.toml`。模型认证由 Pi 管理；本机历史、日志和运行数据不同步。登录时隐藏启动，手动可用 `quick-ask start / stop / status`。
 

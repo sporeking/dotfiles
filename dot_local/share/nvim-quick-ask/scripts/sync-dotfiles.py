@@ -7,11 +7,15 @@ import subprocess
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-FIELDS = {
-    "pi": ("command", "provider", "model", "thinking", "timeout", "web_extension"),
-    "agent": ("workspace",),
-    "ui": ("input_method",),
-}
+FIELDS = {"pi": ("command",), "agent": ("workspace",)}
+# Only obsolete public program files; never databases, native sessions or config overrides.
+RETIRED_FILES = (
+    "quick_ask_backend/__init__.py", "quick_ask_backend/__main__.py",
+    "quick_ask_backend/config.py", "quick_ask_backend/store.py", "quick_ask_backend/pi.py",
+    "quick_ask_backend/agent.py", "quick_ask_backend/messages.py", "quick_ask_backend/server.py",
+    "nvim/init.lua", "nvim/lua/quick_ask/init.lua", "extensions/web-search.ts",
+    "tests/test_backend.py", "tests/test_agent.py", "tests/nvim_smoke.lua", "tests/desktop_pi.py",
+)
 
 
 def public_config(path):
@@ -45,8 +49,14 @@ def main():
         parser.error("--dotfiles must be a Git checkout/worktree")
     package = repo / "dot_local/share/nvim-quick-ask"
     files = [Path(name) for name in ("README.md", "INTERFACE.md", "config.toml.example", "bin/quick-ask", "scripts/sync-dotfiles.py")]
-    for directory, pattern in (("quick_ask_backend", "*.py"), ("extensions", "*.ts"), ("nvim", "**/*.lua"), ("hyprland", "*.lua"), ("tests", "*.py"), ("tests", "*.lua")):
-        files.extend(path.relative_to(ROOT) for path in (ROOT / directory).glob(pattern) if path.is_file())
+    files.extend(Path(name) for name in ("extensions/vim-navigation.ts", "tests/test_launcher.py", "tests/native_pi_smoke.py", "tests/desktop_smoke.py"))
+    files.extend(path.relative_to(ROOT) for path in (ROOT / "hyprland").glob("*.lua") if path.is_file())
+    for relative in RETIRED_FILES:
+        retired = package / relative
+        if retired.exists():
+            if not retired.resolve().is_relative_to(package.resolve()) or not retired.is_file():
+                raise ValueError(f"Unexpected retired source target: {retired}")
+            retired.unlink()
     outputs = {}
     for relative in files:
         # The public CLI wrapper invokes this Python source explicitly; keeping

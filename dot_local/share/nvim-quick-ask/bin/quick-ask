@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dedicated Neovim quick-ask window control (Hyprland 0.55+ Lua API)."""
+"""Dedicated native Pi floating window control (Hyprland 0.55+ Lua API)."""
 from __future__ import annotations
 
 import argparse
@@ -9,9 +9,12 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import time
+import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_ID = "nvim-quick-ask"
@@ -21,10 +24,10 @@ WORKSPACE = "special:quick-ask"
 def runtime_dir() -> Path:
     override = os.environ.get("QUICK_ASK_RUNTIME_DIR")
     base = Path(os.environ.get("XDG_RUNTIME_DIR", f"/tmp/quick-ask-{os.getuid()}"))
-    path = Path(override) if override else base / APP_ID
+    path = (Path(override) if override else base / APP_ID).expanduser().absolute()
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     if path.stat().st_uid != os.getuid():
-        raise RuntimeError("Quick Ask runtime directory is not owned by this user")
+        raise RuntimeError("Pi runtime directory is not owned by this user")
     path.chmod(0o700)
     return path
 
@@ -55,20 +58,17 @@ def visible() -> bool:
                for m in hypr_json("monitors"))
 
 
-def notify_nvim(method: str) -> bool:
-    socket = runtime_dir() / "nvim.sock"
-    if not socket.exists():
-        return False
-    expr = f"luaeval(\"require('quick_ask').{method}()\")"
-    try:
-        result = run(["nvim", "--headless", "--server", str(socket), "--remote-expr", expr], timeout=7)
-        return result == "1"
-    except (RuntimeError, subprocess.TimeoutExpired):
-        return False
+def control_socket() -> Path:
+    return runtime_dir() / "kitty.sock"
+
+
+def remote(*args: str, timeout: float = 3) -> str:
+    return run(["kitty", "@", "--to", "unix:" + str(control_socket()),
+                "--use-password", "never", *args], timeout=timeout)
 
 
 def configure_rule() -> None:
-    # A specific app-id prevents any ordinary Kitty or Neovim being matched.
+    # Keep the established app-id and workspace; ordinary Kitty windows never match.
     lua('if not _G.__nvim_quick_ask_rule then '
         '_G.__nvim_quick_ask_rule = hl.window_rule({'
         'name="nvim-quick-ask",match={class="^nvim-quick-ask$"},'
@@ -76,66 +76,165 @@ def configure_rule() -> None:
         'size={900,600},center=true}) end')
 
 
-def isolated_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env.update({"NVIM_APPNAME": APP_ID, "QUICK_ASK_ROOT": str(ROOT),
-                "QUICK_ASK_CTL": str(ROOT / "bin" / "quick-ask"),
-                "PYTHONPATH": str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")})
-    for key in ("NVIM", "NVIM_LISTEN_ADDRESS", "VIMINIT", "EXINIT", "GVIMINIT"):
-        env.pop(key, None)
-    return env
+def launch_settings() -> tuple[str, Path, Path]:
+    """Read only launcher settings. Pi owns all model, extension and auth settings."""
+    path = Path(os.environ.get("QUICK_ASK_CONFIG") or "~/.config/nvim-quick-ask/config.toml").expanduser()
+    data = {}
+    if path.exists():
+        with path.open("rb") as stream:
+            data = tomllib.load(stream)
+    pi, agent = data.get("pi", {}), data.get("agent", {})
+    if not isinstance(pi, dict) or not isinstance(agent, dict):
+        raise ValueError("pi and agent settings must be TOML tables")
+    command = pi.get("command", "pi")
+    workspace = agent.get("workspace", "~/agent-workspace")
+    for name, value in (("pi.command", command), ("agent.workspace", workspace)):
+        if not isinstance(value, str) or not value.strip() or "\x00" in value:
+            raise ValueError(f"{name} must be a nonempty string")
+    command = os.path.expanduser(command)
+    if os.sep in command:
+        command = str(Path(command).absolute())
+    db = Path(os.environ.get("QUICK_ASK_DB") or "~/.local/share/nvim-quick-ask/history.sqlite3").expanduser().absolute()
+    return command, Path(workspace).expanduser().absolute(), db.parent / "sessions"
+
+
+def kitty_command(command: str, sessions: Path) -> list[str]:
+    # The user's fonts/colors remain intact. Ignore only startup_session, which
+    # would otherwise replace our explicit child command, and close confirmations.
+    return ["kitty", "--class", APP_ID, "--title", "Pi", "--session", "none",
+            "--listen-on", "unix:" + str(control_socket()),
+            "--override", "allow_remote_control=socket-only",
+            "--override", "confirm_os_window_close=0",
+            command, "--tui-mode", "fullscreen", "--session-dir", str(sessions),
+            "--continue", "--extension", str(ROOT / "extensions" / "vim-navigation.ts")]
+
+
+def process_identity(pid: int) -> tuple[int, str] | None:
+    """Linux parent PID and birth tick; never signal a recycled process ID."""
+    try:
+        path = Path(f"/proc/{pid}/stat")
+        if path.stat().st_uid != os.getuid():
+            return None
+        fields = path.read_text().rpartition(")")[2].split()
+        if fields[0] == "Z":
+            return None
+        return int(fields[1]), fields[19]
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def remember_children(owned: dict[int, str], root_pid: int | None = None) -> None:
+    """Capture this window's descendants, including detached command groups."""
+    if root_pid is not None:
+        identity = process_identity(root_pid)
+        if identity:
+            owned[root_pid] = identity[1]
+    table = {}
+    for path in Path("/proc").glob("[0-9]*/stat"):
+        pid = int(path.parent.name)
+        identity = process_identity(pid)
+        if identity:
+            table[pid] = identity
+    parents = {pid for pid, birth in owned.items() if pid in table and table[pid][1] == birth}
+    while True:
+        children = {pid for pid, (parent, birth) in table.items() if parent in parents and pid not in parents}
+        if not children:
+            break
+        for pid in children:
+            owned[pid] = table[pid][1]
+        parents.update(children)
+
+
+def alive(owned: dict[int, str]) -> bool:
+    return any((identity := process_identity(pid)) and identity[1] == birth for pid, birth in owned.items())
+
+
+def signal_owned(owned: dict[int, str], signum: int) -> None:
+    for pid, birth in owned.items():
+        identity = process_identity(pid)
+        if identity and identity[1] == birth and pid != os.getpid():
+            try:
+                os.kill(pid, signum)
+            except ProcessLookupError:
+                pass
+
+
+def clean_children(owned: dict[int, str]) -> None:
+    for signum in (signal.SIGTERM, signal.SIGKILL):
+        if not alive(owned):
+            return
+        remember_children(owned)
+        signal_owned(owned, signum)
+        deadline = time.monotonic() + 1
+        while alive(owned) and time.monotonic() < deadline:
+            time.sleep(0.05)
+    if alive(owned):
+        raise RuntimeError("Pi window's owned processes did not finish shutting down")
+
+
+def clear_stale_socket() -> None:
+    path = control_socket()
+    if not path.exists():
+        return
+    if path.is_symlink() or not path.is_socket():
+        raise RuntimeError("Pi control path is not a dedicated Unix socket")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        try:
+            probe.connect(str(path))
+        except (ConnectionRefusedError, FileNotFoundError):
+            path.unlink(missing_ok=True)  # Verified private runtime's dead kitty.sock.
+        else:
+            raise RuntimeError("Pi control socket is live but its window is missing")
 
 
 def ensure_started() -> None:
     existing = clients()
     if existing:
         if len(existing) != 1:
-            raise RuntimeError("Multiple quick-ask windows found; close duplicates first")
+            raise RuntimeError("Multiple Pi windows found; close duplicates first")
         return
-    for program in ("nvim", "kitty", "python3", "hyprctl"):
+    command, workspace, sessions = launch_settings()
+    for program in (command, "kitty", "hyprctl"):
         if shutil.which(program) is None:
             raise RuntimeError(f"Required program not found: {program}")
+    if not (ROOT / "extensions" / "vim-navigation.ts").is_file():
+        raise RuntimeError("Pi navigation extension is missing")
+    workspace.mkdir(mode=0o700, parents=True, exist_ok=True)
+    sessions.mkdir(mode=0o700, parents=True, exist_ok=True)
     configure_rule()
+    clear_stale_socket()
     runtime = runtime_dir()
-    socket = runtime / "nvim.sock"
-    if socket.exists():
-        # Never unlink a live unrelated server. A failed dedicated socket is stale.
-        try:
-            run(["nvim", "--headless", "--server", str(socket), "--remote-expr", "1"], timeout=2)
-        except (RuntimeError, subprocess.TimeoutExpired):
-            socket.unlink()
-        else:
-            raise RuntimeError("Quick Ask Neovim is alive but its window is missing; run stop first")
-    command = ["kitty", "--class", APP_ID, "--title", "Quick Agent", "--config", "NONE",
-               "--override", "font_size=13", "--override", "enable_audio_bell=no",
-               "--override", "confirm_os_window_close=0",
-               "--override", "shell_integration=disabled",
-               "--override", "background=#161b22", "--override", "foreground=#e6edf3",
-               "nvim", "-n", "--listen", str(socket), "-u", str(ROOT / "nvim" / "init.lua")]
-    env = isolated_env()
-    env["NVIM_LOG_FILE"] = str(runtime / "nvim.log")
     with (runtime / "window.log").open("a") as log:
-        proc = subprocess.Popen(command, env=env, cwd=ROOT,
+        proc = subprocess.Popen(kitty_command(command, sessions), env=os.environ.copy(), cwd=workspace,
                                 stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                                start_new_session=True)
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            raise RuntimeError(f"Kitty exited during startup; inspect {runtime / 'window.log'}")
-        if clients() and socket.exists():
-            # The UI's setup is synchronous; its RPC becomes ready after setup.
-            if notify_nvim("before_hide"):
-                return
-        time.sleep(0.1)
-    raise RuntimeError(f"Quick Ask startup timed out; inspect {runtime / 'window.log'}")
+                                start_new_session=True, umask=0o077)
+    owned = {}
+    try:
+        remember_children(owned, proc.pid)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            remember_children(owned)
+            if proc.poll() is not None:
+                raise RuntimeError(f"Kitty exited during startup; inspect {runtime / 'window.log'}")
+            if clients() and control_socket().exists():
+                try:
+                    if json.loads(remote("ls")):
+                        return  # Mapped, hidden by the rule, and remotely controllable.
+                except (RuntimeError, ValueError, subprocess.TimeoutExpired):
+                    pass
+            time.sleep(0.1)
+        raise RuntimeError(f"Pi startup timed out; inspect {runtime / 'window.log'}")
+    except BaseException:
+        remember_children(owned)
+        clean_children(owned)
+        proc.wait(timeout=2)
+        raise
 
 
 def hide() -> None:
-    if not clients():
-        return
-    if not notify_nvim("before_hide"):
-        raise RuntimeError("Neovim did not acknowledge state save; window kept open")
-    if visible():
+    # No agent notification/cancellation: visibility belongs to the compositor.
+    if clients() and visible():
         lua('hl.dispatch(hl.dsp.workspace.toggle_special("quick-ask"))')
 
 
@@ -148,7 +247,6 @@ def window_geometry(monitor: dict) -> tuple[int, int, int, int]:
     left, top, right, bottom = monitor.get("reserved", [0, 0, 0, 0])
     available_width = width / scale - left - right
     available_height = height / scale - top - bottom
-    # Leave room for borders/shadows and fit displays smaller than the default.
     width = max(1, min(900, int(available_width) - 48))
     height = max(1, min(600, int(available_height) - 48))
     x = round(monitor["x"] + left + (available_width - width) / 2)
@@ -157,15 +255,13 @@ def window_geometry(monitor: dict) -> tuple[int, int, int, int]:
 
 
 def place_window() -> None:
-    # A special workspace keeps its floating offsets when moving to another
-    # monitor. The map-time center rule alone cannot keep such offsets in bounds.
     windows = clients()
     if len(windows) != 1:
-        raise RuntimeError("Expected one quick-ask window while positioning")
+        raise RuntimeError("Expected one Pi window while positioning")
     window = windows[0]
     monitor = next((m for m in hypr_json("monitors") if m["id"] == window["monitor"]), None)
     if monitor is None:
-        raise RuntimeError("Quick Ask monitor is unavailable; try showing it again")
+        raise RuntimeError("Pi monitor is unavailable; try showing it again")
     x, y, width, height = window_geometry(monitor)
     selector = json.dumps("address:" + window["address"])
     lua(f'hl.dispatch(hl.dsp.window.resize({{window={selector},x={width},y={height},relative=false}})); '
@@ -175,27 +271,39 @@ def place_window() -> None:
 def show() -> None:
     ensure_started()
     if not visible():
-        if not notify_nvim("on_show"):
-            raise RuntimeError("Quick Ask UI is not responding")
         lua('hl.dispatch(hl.dsp.workspace.toggle_special("quick-ask"))')
-    # Recompute after the workspace has moved, using its actual destination.
     place_window()
-    # Native focus selector is app-specific; no ordinary Kitty is involved.
     lua('hl.dispatch(hl.dsp.focus({window="class:^nvim-quick-ask$"}))')
 
 
 def stop() -> None:
-    if not clients():
+    windows = clients()
+    if not windows:
         return
-    hide()
-    run(["nvim", "--headless", "--server", str(runtime_dir() / "nvim.sock"),
-         "--remote-send", "<C-\\><C-N>:qa!<CR>"])
-    # Sending :qa! only queues input. Wait for the window to disappear so a
-    # following show/start cannot mistake the exiting instance for a live UI.
-    deadline = time.monotonic() + 5
+    if len(windows) != 1:
+        raise RuntimeError("Multiple Pi windows found; close duplicates first")
+    owned = {}
+    remember_children(owned, windows[0].get("pid"))
+    # Native Pi handles SIGTERM with its session_shutdown lifecycle. This works
+    # independently of editor mode or queued input.
+    try:
+        remote("signal-child", "--match", "all", "SIGTERM")
+    except (RuntimeError, OSError, subprocess.TimeoutExpired):
+        pass
+    deadline = time.monotonic() + 4
+    while clients() and time.monotonic() < deadline:
+        remember_children(owned)
+        time.sleep(0.05)
+    if clients():
+        try:
+            remote("close-window", "--match", "all")
+        except (RuntimeError, OSError, subprocess.TimeoutExpired):
+            pass
+    clean_children(owned)
+    deadline = time.monotonic() + 2
     while clients():
         if time.monotonic() >= deadline:
-            raise RuntimeError("Quick Ask did not finish shutting down")
+            raise RuntimeError("Pi window did not finish shutting down")
         time.sleep(0.05)
 
 
@@ -216,7 +324,7 @@ def main() -> int:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if args.action == "status":
             print(json.dumps({"running": bool(clients()), "visible": visible(),
-                              "socket": str(runtime_dir() / "nvim.sock")}, ensure_ascii=False))
+                              "socket": str(control_socket())}, ensure_ascii=False))
         elif args.action == "start":
             ensure_started()
         elif args.action == "show":

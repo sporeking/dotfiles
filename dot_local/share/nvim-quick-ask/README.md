@@ -1,77 +1,61 @@
-# Quick Agent：Vim 悬浮文件与命令助手
+# 悬浮 Pi：原生界面与 Vim 浏览
 
 ## 目的
 
-按 Alt+A 调出一个小窗口，用自然语言处理文件、运行命令或连续追问。问题区使用原生 Vim 多行编辑，下方按顺序显示对话、工具进度和结果。后端复用 Pi 的模型配置、持续会话与工具执行，和原翻译器各自独立。
+按 Alt+A 打开 Pi 原生终端界面，用同一个 agent 连续提问、读写文件和执行命令。窗口隐藏后任务继续。模型、工具展示、扩展、队列和会话管理全部使用 Pi 的现成功能。
 
-例如先说“在当前目录创建 notes.md，写三条待办”，再说“给刚才那个文件加上日期”。后一次请求会带着同一会话的上下文。隐藏窗口后任务继续运行，再次打开即可查看结果。
+本组件只负责 Kitty 悬浮窗口、双屏定位，以及少量 Vim 浏览键位。它没有另一套对话界面、RPC 后端或历史索引服务；原翻译器独立运行。
 
 ## 使用方法
 
-依赖 Python 3.11+、Neovim 0.11+、Kitty、Hyprland 0.55+ Lua API，以及已经配置模型和认证的 Pi。当前集成基于 Pi 1.5.0 RPC 协议。可选的网页搜索需要 `pi-web-access`：
+依赖 Python 3.11+、Kitty、Hyprland 0.55+ Lua API 和已配置模型/认证的 Pi。当前验证版本为 Pi 1.5.0。沿用 Pi 的正常用户配置与扩展，字体和配色沿用 Kitty 配置。
 
-```sh
-pi install npm:pi-web-access
-```
-
-| 按键 / 命令 | 功能 |
+| 按键 | 功能 |
 | --- | --- |
-| `Alt+A` | 打开 / 隐藏窗口 |
-| `i` / `Esc` | 编辑 / 返回 Normal |
-| `Enter` | 继续当前会话；任务运行中则排队下一条消息 |
-| `Ctrl+C` | 运行中取消任务和队列；空闲时提交 |
-| `:NewChat` | 开始独立的新会话，空闲时可用 |
-| Normal `/` 或 `:History` | 搜索会话和旧问答记录 |
-| 历史列表 `j/k`、`Enter`、`Esc` | 选择、恢复、返回 |
-| `Tab` | 空闲时切换专用 `web_search` 工具可用性 |
-| `Ctrl+D` / `Ctrl+U` | 滚动下方对话 |
-| `:q` / `:q!` | 保存并隐藏；任务继续 |
-| `:qa!` | 保存、停止本工具拥有的任务并退出 |
+| `Alt+A` | 打开 / 隐藏窗口；保留进程、当前输入和任务 |
+| `Esc` | 从 Insert 进入 Normal 浏览模式 |
+| Normal `j/k` | 向下 / 向上滚动对话历史 |
+| Normal `Ctrl+U / Ctrl+D` | 向上 / 向下滚动半页 |
+| Normal `gg / G` | 跳到开头 / 回到底部并跟随输出 |
+| Normal `/` | Pi 原生对话全文搜索；Esc 关闭搜索 |
+| Normal `i/a` | 回到底部，继续输入；保留原草稿 |
+| Normal `h/l`、`0/$` | 移动输入光标；这里提供少量 Vim 编辑，不是完整 Vim |
+| Normal 再按 `Esc` | Pi 原生取消 / 中断 |
+| Insert `Enter` | Pi 原生发送；执行中的输入按 Pi 原有规则处理 |
+| `Alt+Enter` | Pi 原生排队 follow-up |
+| `Ctrl+L` / `Ctrl+O` | Pi 原生模型选择 / 工具输出展开 |
 
-问题区固定三行，可滚动编辑更多内容；用 `o/O` 或 Insert 下 `Ctrl+J` 换行，`j/k` 保留原生 Vim 行移动。正在运行时也可以编辑下一条草稿。提交确认只清空尚未被改动的那份草稿。取消后，尚未执行的排队消息放回草稿；已经完成的文件修改不会自动回滚。
+启动时处于 Insert，`j/k` 正常输入。Normal 的滚动针对整段对话，不是在旧输入记录之间切换。输入历史仍用 Pi 原生方向键；会话选择器等弹窗使用 Pi 原生按键。
 
-`/` 按字面关键词、不区分大小写搜索全部问题和回答，支持中文和 Unicode casefold，不使用 Vim 正则。查询框沿用上次关键词，`Ctrl+U` 可清空。搜索包含压缩上下文以前的原始记录。选择会话会恢复其上下文；旧版本的单轮问答仍可搜索和查看，按 Enter 会在新 agent 会话重新提问，不会串入其他对话。
+在 Insert 输入 `/new` 新建会话、`/resume` 恢复会话、`/model` 换模型、`/quit` 退出。`Ctrl+G` 使用 Pi 原生外部编辑器，可在 Pi 配置 `externalEditor` 或设置 `$EDITOR` 为 Neovim。快捷键帮助用 `/hotkeys`。
 
-## 工作目录和权限
+## 工作目录、权限与数据
 
-默认工作目录为 `~/agent-workspace`，新会话会自动创建并使用该目录。修改 `~/.config/nvim-quick-ask/config.toml` 可以更换：
+默认工作目录是 `~/agent-workspace`。配置在 `~/.config/nvim-quick-ask/config.toml`：
 
 ```toml
+[pi]
+command = "pi"
+
 [agent]
 workspace = "~/agent-workspace"
 ```
 
-这只是默认工作起点，不是沙箱。文件工具和命令以你的普通用户身份运行，也可以访问该账户有权限访问的其他路径；没有额外的逐命令确认流程。第一版提供 Pi 原生 `read`、`write`、`edit`、`bash`、`grep`、`find`、`ls`。不添加浏览器点击或图形界面控制工具。
+这是起始目录，不是沙箱。Pi 以普通用户身份运行，可以访问该账户有权限访问的其他路径。模型、思考档位、工具和扩展配置均由 Pi 管理；旧版组件配置中的 provider、model、thinking、timeout、web_extension、input_method 已不再使用。
 
-已有会话保留原来的工作目录；新配置作用于新会话。Vim `:cd` 不会改变 Pi 会话的目录。Tab 仅控制专用网页搜索工具，不提供网络隔离，也不要求每次都执行搜索。
+原生会话继续存放在 `~/.local/share/nvim-quick-ask/sessions/`，每次启动使用 Pi `--continue` 恢复当前目录最近的会话，也可以 `/resume` 选择。已有 agent 的 JSONL 会话可直接沿用。更早的单轮问答和旧草稿数据库 `history.sqlite3` 原样保留作归档，不会自动变成 Pi 会话。
 
-Pi 继续管理模型、认证和密钥。`[pi] provider/model` 留空时沿用 Pi 默认值。`thinking = "off"` 是请求值，实际档位取决于模型支持；例如当前 DeepSeek V4.1 Flash 在 Pi 中最低为 `low`。持久 agent 没有整个任务的 180 秒运行限制；`pi.timeout` 仍供旧单轮接口及有上限的 RPC 响应等待使用。
+隐藏保留内存中的输入；退出后按 Pi 原生规则恢复会话，不额外承诺恢复尚未发送的草稿。认证仍由 Pi 管理。公开同步不包含历史、会话、密钥、工作目录文件或运行日志。
 
-## 实现方式与数据
+## 实现方式
 
-- 独立 Kitty / Neovim 实例、app-id `nvim-quick-ask`、special workspace 和 socket。启动时隐藏；在缩放、旋转屏幕的实际工作区中定位和聚焦。
-- 编辑器保持一个 Python NDJSON 服务；服务管理当前对话的原生 `pi --mode rpc` 进程。连续追问使用同一个会话，运行中的请求进入 Pi 原生 follow-up 队列。
-- Pi 负责工具循环、重试、上下文压缩与 JSONL 持久化；客户端等 `agent_settled` 才认为任务结束。`Ctrl+C` 先清队列再 abort，关闭编辑器则回收拥有的进程。
-- 工具输出更新是累计快照，界面替换预览，不重复拼接。原生会话保留完整记录；下方只展示工具名称、路径或命令及简短输出。界面不显示模型思考或原始服务诊断。
-- SQLite 保留旧问答、会话索引和草稿状态。会话使用绝对路径恢复，从 JSONL 的用户/助手消息建立完整搜索索引，不用当前压缩后的短历史代替原始历史。
-- 模型与认证沿用 Pi；本工具关闭自动加载的扩展、MCP、skills 和上下文文件，仅显式开放上述工具及可选搜索扩展。
+[窗口启动器](bin/quick-ask)调用 Kitty，直接启动 `pi --tui-mode fullscreen --session-dir … --continue --extension …/vim-navigation.ts`。它沿用既有专用窗口标识、special workspace 与 Alt+A，打开时根据实际显示器的缩放、旋转和可用区域居中并聚焦。隐藏只改变窗口可见性；停止会请求 Pi 原生 SIGTERM 退出，并清理这个窗口拥有的进程。
 
-源码入口：[启动器](bin/quick-ask)、[Vim 界面](nvim/lua/quick_ask/init.lua)、[NDJSON 服务](quick_ask_backend/server.py)、[Pi RPC 进程](quick_ask_backend/agent.py)和[历史索引](quick_ask_backend/store.py)。
+[Vim 扩展](extensions/vim-navigation.ts)在 Pi 原生 CustomEditor 上添加模式和键位，直接调用 Pi 的滚动、搜索接口；原生布局、主题和工具展示均保留。[Hyprland 入口](hyprland/quick-ask.lua)负责快捷键与登录时隐藏启动。
 
-默认位置：
-
-| 内容 | 位置 |
-| --- | --- |
-| 配置 | `~/.config/nvim-quick-ask/config.toml` |
-| 历史 / 状态 | `~/.local/share/nvim-quick-ask/history.sqlite3` |
-| 原生会话 | `~/.local/share/nvim-quick-ask/sessions/` |
-| 运行 socket / 日志 | `$XDG_RUNTIME_DIR/nvim-quick-ask/` |
-
-数据库和会话使用私有权限。公开同步采用文件与配置字段白名单，不包含认证、历史、会话、工作目录内容或运行日志。`QUICK_ASK_CONFIG`、`QUICK_ASK_DB`、`QUICK_ASK_RUNTIME_DIR` 可用于隔离测试，目录详情及事件格式见 [接口说明](INTERFACE.md)。
+运行控制：`quick-ask {start,show,hide,toggle,status,stop}`。私有运行目录为 `$XDG_RUNTIME_DIR/nvim-quick-ask/`，含 Kitty 控制 socket 和启动日志。`QUICK_ASK_CONFIG`、`QUICK_ASK_DB`、`QUICK_ASK_RUNTIME_DIR` 可隔离测试，其中 DB 路径仅用于定位相邻 sessions 目录，不会被新启动器打开或写入。详见 [控制约定](INTERFACE.md)。
 
 ## 部署和验证
-
-从此目录运行：
 
 ```sh
 python3 scripts/sync-dotfiles.py --dotfiles /path/to/dotfiles
@@ -79,17 +63,13 @@ chezmoi --source /path/to/dotfiles apply ~/.local/share/nvim-quick-ask ~/.local/
 quick-ask start
 ```
 
-Hyprland 的 `hyprland/quick-ask.lua` 负责 Alt+A 和登录时隐藏启动。终端可用 `quick-ask {start,show,hide,toggle,status,stop}`，原翻译器快捷键不变。
+从旧 Neovim 版本升级时，先用旧启动器 `quick-ask stop` 保存并关闭已有窗口，再应用新版。同步脚本会移除公开源码中的旧界面/后端文件，保留数据库与会话；旧实现仍可在 Git 历史查看。
 
 ```sh
-python3 -m unittest discover -s tests -p 'test_*.py'
-nvim --headless -u NONE -l tests/nvim_smoke.lua
-# 桌面回归需先停止已有窗口；默认模拟 Pi，不调用模型。
-quick-ask stop
+python3 -m unittest discover -s tests -p test_launcher.py
+python3 tests/native_pi_smoke.py
+# 桌面验证先关闭已有窗口，不调用模型；测试后可重新 quick-ask start。
 python3 tests/desktop_smoke.py
-# 可选真实 Pi：实际创建文件、连续修改并运行命令。
-python3 tests/desktop_smoke.py --live
-quick-ask start
 ```
 
-测试数据隔离在 `.runtime/`。本机 41 项 Python 测试与 Neovim smoke 已通过；模拟和真实 Pi 的桌面回归均通过。真实两轮任务先创建并读回文件，再根据“刚才那个文件”追加内容并执行命令统计行数，确认了上下文与实际操作。协议测试覆盖队列与取消、工具快照、压缩前历史、原生目录恢复、失败及退出清理；Vim 测试覆盖连续对话、草稿竞态、隐藏继续、历史选择、输入法和退出。桌面回归也检查两屏定位/焦点和会话重启恢复，原翻译器及其他窗口布局保持一致。
+原生 Pi 的 PTY 测试使用明确标注的合成对话，验证真实的 j/k、半页、gg/G、搜索、输入保留与退出，不发起模型请求；桌面测试检查隐藏/复用、双屏焦点与定位、原生会话恢复，并核对原翻译器和其他窗口布局。测试数据留在私有 `.runtime/`。

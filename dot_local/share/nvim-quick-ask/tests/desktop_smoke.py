@@ -1,56 +1,59 @@
 #!/usr/bin/env python3
-"""Opt-in desktop agent test. Simulated Pi by default; --live uses real tools/model.
-
-Stop the existing quick-ask instance first. All conversations, test files and config
-are isolated under .runtime; the translator and other window geometry are checked.
-"""
+"""Opt-in native Pi desktop regression with synthetic history; never calls a model."""
+import datetime
 import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
-import sys
 import tempfile
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-from quick_ask_backend.store import Store
-LIVE = '--live' in sys.argv
 (ROOT / '.runtime').mkdir(exist_ok=True, mode=0o700)
-DATA = Path(tempfile.mkdtemp(prefix='agent-desktop-', dir=ROOT / '.runtime'))
+DATA = Path(tempfile.mkdtemp(prefix='native-desktop-', dir=ROOT / '.runtime'))
 DATA.chmod(0o700)
 WORKSPACE = DATA / 'workspace'
 WORKSPACE.mkdir(mode=0o700)
+SESSIONS = DATA / 'sessions'
+SESSIONS.mkdir(mode=0o700)
 CONFIG = DATA / 'config.toml'
-configuration = '[agent]\nworkspace = ' + json.dumps(str(WORKSPACE)) + '\n[ui]\ninput_method = false\n'
-if not LIVE:
-    fake = DATA / 'pi'
-    fake.write_bytes((ROOT / 'tests/desktop_pi.py').read_bytes())
-    fake.chmod(0o700)
-    configuration += '[pi]\ncommand = ' + json.dumps(str(fake)) + '\n'
-CONFIG.write_text(configuration)
-OVERRIDES = {'QUICK_ASK_CONFIG': str(CONFIG), 'QUICK_ASK_DB': str(DATA / 'history.sqlite3'),
+shim = DATA / 'pi'
+shim.write_text('#!/bin/sh\nexec ' + shlex.quote(shutil.which('pi')) + ' --offline --no-extensions --no-mcp --no-skills --no-context-files "$@"\n')
+shim.chmod(0o700)
+CONFIG.write_text('[pi]\ncommand = ' + json.dumps(str(shim)) + '\n[agent]\nworkspace = ' + json.dumps(str(WORKSPACE)) + '\n')
+OVERRIDES = {'QUICK_ASK_CONFIG': str(CONFIG), 'QUICK_ASK_DB': str(DATA / 'archive.sqlite3'),
              'QUICK_ASK_RUNTIME_DIR': str(DATA / 'control')}
 ENV = os.environ | OVERRIDES
 CTL = ['python3', str(ROOT / 'bin/quick-ask')]
-SOCKET = str(DATA / 'control/nvim.sock')
-Store(DATA / 'history.sqlite3').add({'id': 'legacy-fixture', 'question': '旧问答测试',
-    'answer': '旧记录保留测试 legacy-only-needle', 'web_search': False,
-    'sources': [], 'created_at': '2026-11-05T00:00:00Z'})
+SOCKET = DATA / 'control/kitty.sock'
+now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+session_id = str(uuid.uuid4())
+session = SESSIONS / ('2026-11-05T00-00-00-000Z_' + session_id + '.jsonl')
+rows = [{'type': 'session', 'version': 3, 'id': session_id, 'timestamp': now, 'cwd': str(WORKSPACE)},
+        {'type': 'message', 'id': 'user', 'parentId': None, 'timestamp': now,
+         'message': {'role': 'user', 'content': [{'type': 'text', 'text': 'Synthetic desktop navigation test. No model request.'}], 'timestamp': 1}},
+        {'type': 'message', 'id': 'assistant', 'parentId': 'user', 'timestamp': now,
+         'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': '```text\n' + '\n'.join('NATIVE%03d' % i for i in range(80)) + '\n```'}],
+                     'api': 'openai-completions', 'provider': 'opencode-go', 'model': 'deepseek-v4.1-flash', 'stopReason': 'stop', 'timestamp': 2,
+                     'usage': dict(input=0, output=0, cacheRead=0, cacheWrite=0, totalTokens=0, cost=dict(input=0, output=0, cacheRead=0, cacheWrite=0, total=0))}}]
+session.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+session.chmod(0o600)
 
 
-def run(args):
-    return subprocess.check_output(args, env=ENV, text=True, timeout=15).strip()
-
-
+def run(args): return subprocess.check_output(args, env=ENV, text=True, timeout=15).strip()
 def query(kind): return json.loads(run(['hyprctl', '-j', kind]))
 def windows(): return [c for c in query('clients') if c.get('class') == 'nvim-quick-ask']
 def ctl(action): return run(CTL + [action])
+def status(): return json.loads(ctl('status'))
 def dispatch(code): assert run(['hyprctl', 'eval', code]) == 'ok'
-def rpc(body):
-    expression = 'luaeval(' + json.dumps('(function() ' + body + ' end)()') + ')'
-    return run(['nvim', '--headless', '--server', SOCKET, '--remote-expr', expression])
+def remote(*args): return run(['kitty', '@', '--to', 'unix:' + str(SOCKET), '--use-password', 'never', *args])
+def screen(): return remote('get-text', '--match', 'all', '--extent', 'screen')
+def key(value): remote('send-key', '--match', 'all', value)
+def text(value): remote('send-text', '--match', 'all', value)
+def process(): return json.loads(remote('ls'))[0]['tabs'][0]['windows'][0]['pid']
 
 
 def wait_for(predicate, label, timeout=15):
@@ -61,33 +64,10 @@ def wait_for(predicate, label, timeout=15):
     raise AssertionError('Timed out: ' + label)
 
 
-def state():
-    return json.loads(rpc("local s=require('quick_ask').state; return vim.json.encode({initialized=s.initialized,loading=s.loading,message=s.message,session_id=s.session_id or vim.NIL,selected=s.selected_id or vim.NIL,messages=s.messages or {},web_search=s.web_search,draft=table.concat(vim.api.nvim_buf_get_lines(s.input_buf,0,-1,false),'\\n'),cursor=vim.api.nvim_win_get_cursor(s.input_win),search_count=s.search and s.search.entries and #s.search.entries or -1})"))
-
-
-def set_draft(text):
-    encoded = json.dumps(json.dumps(text.split('\n'), ensure_ascii=False), ensure_ascii=False)
-    rpc("local s=require('quick_ask').state;vim.api.nvim_buf_set_lines(s.input_buf,0,-1,false,vim.json.decode(" + encoded + '));return 1')
-
-
-def submit(text):
-    set_draft(text)
-    rpc("require('quick_ask').submit();return 1")
-
-
-def history(term):
-    rpc("return vim.api.nvim_input('/')")
-    rpc('return vim.api.nvim_input(' + json.dumps('<C-U>' + term + '<CR>', ensure_ascii=False) + ')')
-    wait_for(lambda: state()['search_count'] >= 1, 'history match')
-    rpc("return vim.api.nvim_input('<CR>')")
-    wait_for(lambda: state()['search_count'] == -1, 'history selection')
-
-
 def desktop_toggle(visible):
     command = shlex.join(['env', *[k + '=' + v for k, v in OVERRIDES.items()], *CTL, 'toggle'])
-    command += ' >' + shlex.quote(str(DATA / 'launcher.log')) + ' 2>&1'
     dispatch('hl.dispatch(hl.dsp.exec_cmd(' + json.dumps(command) + '))')
-    wait_for(lambda: json.loads(ctl('status'))['visible'] == visible, 'workspace visibility')
+    wait_for(lambda: status()['visible'] == visible, 'visibility')
     if visible and not query('locked').get('locked'):
         wait_for(lambda: query('activewindow').get('class') == 'nvim-quick-ask', 'keyboard focus')
 
@@ -102,77 +82,62 @@ def fits(monitor):
     width, height = width / monitor['scale'] - left - right, height / monitor['scale'] - top - bottom
     cx, cy = client['at']; cw, ch = client['size']
     assert x <= cx and y <= cy and cx + cw <= x + width and cy + ch <= y + height
-    assert abs(cx + cw / 2 - (x + width / 2)) <= 2
-    assert abs(cy + ch / 2 - (y + height / 2)) <= 2
+    assert abs(cx + cw / 2 - (x + width / 2)) <= 2 and abs(cy + ch / 2 - (y + height / 2)) <= 2
 
 
-if windows(): raise SystemExit('Stop existing quick-ask before the isolated desktop test')
+if windows(): raise SystemExit('Stop existing quick-ask before isolated native desktop test')
 original_focus = query('activewindow').get('address')
 original_cursor = query('cursorpos')
 baseline = {c['address']: (c['at'], c['size'], c['workspace']) for c in query('clients')}
 try:
     ctl('start')
-    wait_for(lambda: state().get('initialized'), 'editor initialized')
-    assert not json.loads(ctl('status'))['visible']
+    wait_for(lambda: 'INSERT' in screen() and 'NATIVE079' in screen(), 'native Pi editor/continued session', 20)
+    assert not status()['visible']
+    print('PASS: native Pi starts hidden and resumes existing JSONL history', flush=True)
     for monitor in query('monitors'):
         ctl('hide')
         dispatch('hl.dispatch(hl.dsp.focus({monitor=' + json.dumps(monitor['name']) + '}))')
         desktop_toggle(True); fits(monitor)
-        print('PASS: placement/focus on ' + monitor['name'], flush=True)
-    question = '在当前工作目录创建 agent-smoke.txt，内容严格为一行 quick-agent-first（行末换行）。请实际写文件并读回验证，简短报告结果。'
-    submit(question)
-    wait_for(lambda: state()['loading'], 'task starts')
-    set_draft('任务运行时保留的草稿\nsecond line')
-    rpc("local s=require('quick_ask').state;vim.api.nvim_win_set_cursor(s.input_win,{2,3});return 1")
+        print('PASS: native window placement/focus on ' + monitor['name'], flush=True)
+    text('pending_jk')
+    wait_for(lambda: 'pending_jk' in screen(), 'native draft')
+    key('escape')
+    wait_for(lambda: 'NORMAL' in screen(), 'browse mode')
+    text('gg')
+    wait_for(lambda: 'NATIVE000' in screen(), 'native history top')
+    text('G')
+    wait_for(lambda: 'NATIVE079' in screen(), 'native history bottom')
+    before_pid = process()
     desktop_toggle(False)
-    wait_for(lambda: not state()['loading'], 'hidden task completion', 210 if LIVE else 15)
-    target = WORKSPACE / 'agent-smoke.txt'
-    assert target.read_text() == 'quick-agent-first\n', state()['message']
-    assert state()['draft'] == '任务运行时保留的草稿\nsecond line'
-    session_id = state()['session_id']; assert session_id
-    print('PASS: task writes/reads file while hidden; editing preserves task and draft', flush=True)
+    assert process() == before_pid
+    assert 'NORMAL' in screen() and 'pending_jk' in screen()
     desktop_toggle(True)
-    submit('给刚才那个文件追加一行 quick-agent-second，然后运行命令统计行数，简短告诉我文件内容和行数。')
-    wait_for(lambda: state()['loading'], 'follow-up starts')
-    wait_for(lambda: not state()['loading'], 'follow-up completion', 210 if LIVE else 15)
-    assert state()['session_id'] == session_id
-    assert target.read_text() == 'quick-agent-first\nquick-agent-second\n', state()['message']
-    assert any(message.get('role') == 'tool' for message in state()['messages']), state()['messages']
-    print('PASS: same-session follow-up edits prior file and executes command ' + ('(LIVE)' if LIVE else '(FAKE PI)'), flush=True)
-    if not LIVE:
-        submit('slow task')
-        wait_for(lambda: state()['loading'], 'slow task starts')
-        submit('尚未执行的排队消息')
-        wait_for(lambda: state()['draft'] == '', 'follow-up accepted')
-        set_draft('仍未提交的草稿')
-        rpc("require('quick_ask').control_c();return 1")
-        wait_for(lambda: not state()['loading'], 'abort')
-        wait_for(lambda: '尚未执行的排队消息' in state()['draft'], 'cleared queue restored')
-        assert '仍未提交的草稿' in state()['draft']
-        print('PASS: Ctrl+C stops task/queue and restores pending text without losing draft', flush=True)
-    rpc("vim.cmd('NewChat');return 1")
-    wait_for(lambda: state()['session_id'] != session_id and not state()['loading'], 'new conversation')
-    history('quick-agent-first' if LIVE else '只在答案中的关键词')
-    wait_for(lambda: state()['session_id'] == session_id, 'native session restored')
-    assert target.read_text().splitlines() == ['quick-agent-first', 'quick-agent-second']
-    history('legacy-only-needle')
-    wait_for(lambda: state()['selected'] == 'legacy-fixture' and state()['draft'] == '旧问答测试', 'legacy record restored')
-    history('quick-agent-first')
-    wait_for(lambda: state()['session_id'] == session_id and state()['selected'] is None, 'back to native conversation')
-    print('PASS: history searches full conversation/answers, resumes context, retains legacy history', flush=True)
-    set_draft('重启后的多行草稿\nsecond line')
-    rpc("local s=require('quick_ask').state;vim.api.nvim_win_set_cursor(s.input_win,{2,3});return 1")
-    ctl('hide'); before = state(); ctl('stop'); ctl('start')
-    wait_for(lambda: state().get('initialized') and state()['session_id'] == session_id and len(state()['messages']) >= len(before['messages']), 'native session restart')
-    after = state()
-    for field in ('draft', 'cursor', 'session_id', 'web_search', 'messages'):
-        assert before[field] == after[field], 'Restore mismatch: ' + field
-    assert not json.loads(ctl('status'))['visible']
-    print('PASS: native context, tools, multiline draft, byte cursor and mode survive restart', flush=True)
+    assert process() == before_pid
+    text('i')
+    wait_for(lambda: 'INSERT' in screen() and 'pending_jk' in screen(), 'return to native input')
+    print('PASS: native Vim browse, draft and Pi process retained across hiding/showing', flush=True)
+    key('ctrl+u')
+    text('!printf started > hidden-start; sleep 2; printf done > hidden-proof; printf OUTSIDE > ../ordinary-user-proof; printf HIDDEN_WORK_FINISHED')
+    key('enter')
+    wait_for(lambda: (WORKSPACE / 'hidden-start').exists(), 'native shell command started')
+    ctl('hide')
+    assert not status()['visible']
+    wait_for(lambda: (WORKSPACE / 'hidden-proof').exists(), 'native shell command finishes while hidden')
+    assert not status()['visible'] and process() == before_pid
+    assert (DATA / 'ordinary-user-proof').read_text() == 'OUTSIDE'
+    assert (DATA / 'ordinary-user-proof').stat().st_uid == os.getuid()
+    desktop_toggle(True)
+    wait_for(lambda: 'HIDDEN_WORK_FINISHED' in screen(), 'native shell output')
+    print('PASS: native shell finishes while hidden; ordinary-user access outside starting folder', flush=True)
+    ctl('stop'); assert not windows()
+    ctl('start')
+    wait_for(lambda: 'INSERT' in screen() and 'HIDDEN_WORK_FINISHED' in screen(), 'native conversation restart', 20)
+    assert not status()['visible'] and session.is_file()
+    assert not (DATA / 'archive.sqlite3').exists(), 'Native launcher unexpectedly created a history database'
+    print('PASS: native conversation resumes after real stop/start; no custom database or backend', flush=True)
     current = {c['address']: (c['at'], c['size'], c['workspace']) for c in query('clients') if c.get('class') != 'nvim-quick-ask'}
     assert all(current.get(address) == value for address, value in baseline.items()), 'Other window layout changed'
-    print('PASS: translator and other windows unchanged; data isolated at ' + str(DATA), flush=True)
-    if query('locked').get('locked'): print('NOTE: locked session skipped compositor keyboard focus assertions', flush=True)
+    print('PASS: translator and other windows unchanged; synthetic data isolated at ' + str(DATA), flush=True)
 finally:
     ctl('stop')
     if original_focus:
