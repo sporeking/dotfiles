@@ -106,7 +106,7 @@ def ensure_started() -> None:
             socket.unlink()
         else:
             raise RuntimeError("Quick Ask Neovim is alive but its window is missing; run stop first")
-    command = ["kitty", "--class", APP_ID, "--title", "Quick Ask", "--config", "NONE",
+    command = ["kitty", "--class", APP_ID, "--title", "Quick Agent", "--config", "NONE",
                "--override", "font_size=13", "--override", "enable_audio_bell=no",
                "--override", "confirm_os_window_close=0",
                "--override", "shell_integration=disabled",

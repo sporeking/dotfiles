@@ -13,4 +13,5 @@ dot_local/share/nvim-quick-ask/.runtime/
 dot_local/share/nvim-quick-ask/**/__pycache__/
 dot_local/share/nvim-quick-ask/**/*.py[cod]
 dot_local/share/nvim-quick-ask/*.sqlite3*
+dot_local/share/nvim-quick-ask/sessions/
 dot_local/share/nvim-quick-ask/**/nvim.log

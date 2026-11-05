@@ -14,6 +14,8 @@ AGENTS.md
 # Quick Ask machine-local question history, logs and caches are unmanaged.
 .config/nvim-quick-ask/config.local.toml
 .local/share/nvim-quick-ask/history.sqlite3*
+.local/share/nvim-quick-ask/sessions
+.local/share/nvim-quick-ask/sessions/**
 .local/share/nvim-quick-ask/.runtime
 .local/share/nvim-quick-ask/.runtime/**
 .local/share/nvim-quick-ask/**/__pycache__

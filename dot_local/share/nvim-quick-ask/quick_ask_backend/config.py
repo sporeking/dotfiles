@@ -16,6 +16,7 @@ class Config:
     timeout: float = 180
     web_extension: str = ""
     input_method: bool = True
+    workspace: str = "~/agent-workspace"
 
 
 def config_path() -> Path:
@@ -32,9 +33,9 @@ def load_config() -> Config:
         return Config()
     with path.open("rb") as stream:
         data = tomllib.load(stream)
-    pi, ui = data.get("pi", {}), data.get("ui", {})
-    if not isinstance(pi, dict) or not isinstance(ui, dict):
-        raise ValueError("配置中的 pi 和 ui 必须是表")
+    pi, ui, agent = data.get("pi", {}), data.get("ui", {}), data.get("agent", {})
+    if not all(isinstance(section, dict) for section in (pi, ui, agent)):
+        raise ValueError("配置中的 pi、ui 和 agent 必须是表")
     values = {}
     for key in ("command", "provider", "model", "thinking", "web_extension"):
         value = pi.get(key, getattr(Config(), key))
@@ -54,4 +55,7 @@ def load_config() -> Config:
     input_method = ui.get("input_method", True)
     if not isinstance(input_method, bool):
         raise ValueError("ui.input_method 必须是布尔值")
-    return Config(**values, timeout=timeout, input_method=input_method)
+    workspace = agent.get("workspace", Config().workspace)
+    if not isinstance(workspace, str) or not workspace.strip() or "\x00" in workspace:
+        raise ValueError("agent.workspace 必须是非空路径字符串")
+    return Config(**values, timeout=timeout, input_method=input_method, workspace=workspace)

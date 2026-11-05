@@ -217,7 +217,7 @@ chezmoi re-add PATH          # 用目标文件覆盖源文件（同步“本机�
 | 组件 | 目的 | 使用方法 | 实现方式 |
 | --- | --- | --- | --- |
 | 悬浮翻译器 | [读写英文时查词、双向翻译](dot_local/share/nvim-translator/README.md#目的) | [安装、配置与 Vim 按键](dot_local/share/nvim-translator/README.md#使用方法) | [调用流程与源码分工](dot_local/share/nvim-translator/README.md#实现方式) |
-| 快速问答 | [普通与联网简短问答](dot_local/share/nvim-quick-ask/README.md#目的) | [Alt+A、Vim 编辑与全历史搜索](dot_local/share/nvim-quick-ask/README.md#使用方法) | [Pi、流式界面与 SQLite](dot_local/share/nvim-quick-ask/README.md#实现方式) |
+| 悬浮 Agent | [多轮文件与命令助手](dot_local/share/nvim-quick-ask/README.md#目的) | [Alt+A、Vim 编辑与会话历史](dot_local/share/nvim-quick-ask/README.md#使用方法) | [Pi RPC、原生会话与 SQLite](dot_local/share/nvim-quick-ask/README.md#实现方式与数据) |
 
 ## 组件说明
 
@@ -395,11 +395,11 @@ source ~/.zshrc
 
 ### 快速问答
 
-**目的**：随时问一个简单问题，得到简短回答；可联网查资料，也可搜索以往问题与答案。
+**目的**：用小窗口处理文件、执行命令并连续追问。默认工作目录为 `~/agent-workspace`，它只是起点，不是沙箱；工具使用普通用户权限。
 
-**使用方法**：`Alt+A` 调出，`i` 编辑多行问题，`Enter / Ctrl+C` 提交，生成中 `Ctrl+C` 取消；`Tab` 切普通 / 联网，Normal `/` 搜索全历史，列表 `j/k` 选择、`Enter` 恢复、`Esc` 返回；`:q` 保存并隐藏。联网回答附实际检索来源。先在 Pi 中配置可用模型及认证，并安装 `npm:pi-web-access`。
+**使用方法**：`Alt+A` 调出，`i` 编辑多行消息，`Enter` 继续会话，执行中 Enter 排队下一条；`Ctrl+C` 取消任务及队列。`:NewChat` 新建会话，Normal `/` 搜索会话和旧问答，列表 `j/k`、`Enter`、`Esc` 选择/恢复/返回。`:q` 保存并隐藏，任务继续；`:qa!` 停止并退出。空闲时 `Tab` 切换专用网页搜索工具。先在 Pi 中配置模型与认证，搜索另需 `npm:pi-web-access`。
 
-**实现方式**：独立 Kitty / Neovim 窗口复用双屏定位方式；Python 每次启动一个隔离 Pi，流式接收回答，联网只启用专用 `web_search`。SQLite 分开保存问答历史与草稿，取消及错误不入库。完整配置、源码分工和验证方式见 [组件说明](dot_local/share/nvim-quick-ask/README.md)。
+**实现方式**：独立 Kitty / Neovim 窗口保留双屏定位；Python 维护持续的 Pi RPC 会话，原生工具完成读写文件和命令执行。Pi 保存 JSONL 会话，SQLite 保存草稿、旧问答和完整历史索引；可恢复多轮上下文并显示工具进度。配置、实现和验证见 [组件说明](dot_local/share/nvim-quick-ask/README.md)。
 
 程序源在 `dot_local/share/nvim-quick-ask/`，应用至 `~/.local/share/nvim-quick-ask/`；入口 `~/.local/bin/quick-ask`，公开配置 `~/.config/nvim-quick-ask/config.toml`。模型认证由 Pi 管理；本机历史、日志和运行数据不同步。登录时隐藏启动，手动可用 `quick-ask start / stop / status`。
 

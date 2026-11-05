@@ -89,7 +89,9 @@ def public_error(message):
         return "Pi 认证已过期（api_key_expired），请更新 Pi 的现有认证"
     if "401" in detail or "403" in detail:
         return "Pi 认证失败，请检查 Pi 的现有认证和模型配置"
-    return "Pi 未成功完成回答（" + str(message.get("stopReason", "unknown")) + "）"
+    reason = message.get("stopReason")
+    reason = reason if reason in ("stop", "length", "toolUse", "error", "aborted") else "unknown"
+    return "Pi 未成功完成回答（" + reason + "）"
 
 
 class Events:

@@ -9,6 +9,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {
     "pi": ("command", "provider", "model", "thinking", "timeout", "web_extension"),
+    "agent": ("workspace",),
     "ui": ("input_method",),
 }
 
@@ -17,11 +18,13 @@ def public_config(path):
     source = path if path.is_file() else ROOT / "config.toml.example"
     with source.open("rb") as stream:
         config = tomllib.load(stream)
+    with (ROOT / "config.toml.example").open("rb") as stream:
+        defaults = tomllib.load(stream)
     lines = ["# Public quick-ask settings. Pi owns model credentials; none are copied here.", ""]
     for section, fields in FIELDS.items():
         lines.append(f"[{section}]")
         for name in fields:
-            value = config.get(section, {}).get(name)
+            value = config.get(section, {}).get(name, defaults.get(section, {}).get(name))
             if value is None:
                 continue
             if not isinstance(value, (str, bool, int, float)):

@@ -1,8 +1,9 @@
 local M = {}
 local api = vim.api
 local S = {
-  entries = {}, config = {}, generation = 0, save_generation = 0,
+  entries = {}, sessions = {}, messages = {}, config = {}, generation = 0, save_generation = 0,
   visible = false, loading = false, web_search = false, history_query = '',
+  request_id = 0, queued = 0,
 }
 M.state = S
 
@@ -45,7 +46,7 @@ local function result_scroll()
 end
 local function snapshot()
   return {
-    selected_id = S.selected_id or vim.NIL, draft = draft(),
+    selected_id = S.selected_id or vim.NIL, session_id = S.session_id or vim.NIL, draft = draft(),
     cursor = api.nvim_win_get_cursor(S.input_win), result_scroll = result_scroll(),
     web_search = S.web_search, history_query = S.history_query,
   }
@@ -100,13 +101,14 @@ end
 local function render(entry, scroll)
   S.display = entry and vim.deepcopy(entry) or nil
   if not entry then
-    set_result({ '# Quick Ask', '', '输入问题后 Enter 提交；Ctrl+C 提交 / 取消生成。', '',
-      'Tab：普通 / 联网    / 或 :History：搜索全部历史',
+    set_result({ '# Quick Agent · 多轮会话', '', 'Enter 提问；运行中 Enter 排队，Ctrl+C 取消任务和队列。', '',
+      'Tab：web_search 开关（空闲时）    :NewChat：新会话    / 或 :History：历史',
       '问题区支持多行编辑：o / O 或 Insert 中 Ctrl+J 换行。',
-      'Esc：返回 Normal    Ctrl+D / Ctrl+U：滚动答案    :q：保存并隐藏' }, scroll or 1)
+      'Esc：返回 Normal    Ctrl+D / Ctrl+U：滚动    :q：保存并隐藏，任务继续' }, scroll or 1)
     return
   end
-  local content = { '# 回答 [' .. mode_label(entry.web_search) .. ']', '' }
+  local content = { '# 旧记录 · 单轮回答 [' .. mode_label(entry.web_search) .. ']',
+    '', 'Enter 将在新会话中重新提问；原记录保留。', '' }
   vim.list_extend(content, lines(entry.answer))
   if #(entry.sources or {}) > 0 then
     vim.list_extend(content, { '', '## 来源', '' })
@@ -116,153 +118,328 @@ local function render(entry, scroll)
   end
   set_result(content, scroll or 1)
 end
-local function remember(entry)
-  for i, old in ipairs(S.entries) do
-    if old.id == entry.id then table.remove(S.entries, i); break end
+-- Only tool previews are bounded; the native session retains complete output.
+local function preview(text, max_lines, max_chars)
+  text = tostring(text or ''):gsub('\r', '')
+  local clipped = #text > max_chars
+  if clipped then
+    local boundary = max_chars
+    while boundary > 0 and (text:byte(boundary + 1) or 0) >= 128
+        and (text:byte(boundary + 1) or 0) < 192 do boundary = boundary - 1 end
+    text = text:sub(1, boundary)
   end
-  table.insert(S.entries, 1, entry)
+  local out = lines(text)
+  while #out > max_lines do table.remove(out); clipped = true end
+  if clipped then out[#out + 1] = '…（完整输出保存在会话中）' end
+  return out
 end
-
--- Invalidate ownership BEFORE SIGTERM. Queued stdout, timer, and exit callbacks
--- can then do nothing even when a provider is slow to honor cancellation.
-local function invalidate()
-  S.generation = S.generation + 1
-  local old = S.active
-  S.active = nil
-  S.loading = false
-  if old and old.process then pcall(function() old.process:kill(15) end) end
-end
-local function invalidate_for_edit()
-  local was_loading = S.loading
-  invalidate()
-  if was_loading then
-    -- on_lines holds the text lock: update the Lua state now, redraw later.
-    -- The scheduled redraw must not overwrite a newer request/error message.
-    S.message = '已取消生成 · 编辑草稿'
-    vim.schedule(function() if S.initialized then vim.cmd.redrawstatus() end end)
+local function render_messages(scroll)
+  S.display = nil
+  local content = { '# Quick Agent · ' .. ((S.session and S.session.title) or '多轮会话'), '' }
+  if #S.messages == 0 then
+    vim.list_extend(content, { 'Enter 提问；运行中 Enter 排队，Ctrl+C 取消任务和队列。', '',
+      'Tab：切换 web_search（空闲时）    :NewChat：新会话    / 或 :History：历史',
+      '问题区支持 o / O、Ctrl+J 和原生多行编辑。:q 隐藏，任务继续；:qa! 退出。', '' })
   end
+  for _, message in ipairs(S.messages) do
+    if message.role == 'tool' then
+      local args = type(message.args) == 'table' and message.args or {}
+      local detail = args.command or args.path or args.file_path or args.pattern or args.query or ''
+      content[#content + 1] = '### 工具 · ' .. (message.name or 'tool')
+        .. (message.is_error and ' · 失败' or (message.running and ' · 运行中' or ' · 完成'))
+      vim.list_extend(content, preview(detail, 2, 240))
+      vim.list_extend(content, preview(message.text, 12, 1600))
+    else
+      content[#content + 1] = message.role == 'user' and '## 你' or '## 助手'
+      vim.list_extend(content, lines(message.text))
+    end
+    content[#content + 1] = ''
+  end
+  set_result(content, scroll or result_scroll())
 end
-function M.cancel()
-  local was_loading = S.loading
-  invalidate()
-  if was_loading then status('已取消生成'); queue_save() end
+local function current(server)
+  -- Draft edits never invalidate work. Only replacement/shutdown of the server
+  -- revokes callback ownership, before any signal is sent to the old process.
+  return S.server == server and S.generation == server.generation
+    and S.initialized and api.nvim_buf_is_valid(S.input_buf)
 end
-local function current(stream)
-  return S.active == stream and S.generation == stream.generation
-    and api.nvim_buf_is_valid(S.input_buf)
-    and api.nvim_buf_get_changedtick(S.input_buf) == stream.tick
-end
-local function stream_error(stream, message)
-  if not current(stream) then return end
-  stream.terminal = true
-  S.loading = false
-  S.active = nil
-  if stream.process then pcall(function() stream.process:kill(15) end) end
-  status(message)
-end
-local function flush(stream)
-  if not current(stream) then return end
-  render(stream.entry, stream.topline)
-end
-local function schedule_flush(stream)
-  if stream.pending_render then return end
-  stream.pending_render = true
+local function schedule_flush(server)
+  if server.pending_render then return end
+  server.pending_render = true
   vim.defer_fn(function()
-    stream.pending_render = false
-    flush(stream)
+    server.pending_render = false
+    if current(server) and not S.search and S.session_id then render_messages() end
   end, 40)
 end
-local function event(stream, raw)
-  if not current(stream) or stream.terminal or raw:match('^%s*$') then return end
+local function restore_queue(texts)
+  if type(texts) ~= 'table' or #texts == 0 then return end
+  local existing, cursor = draft(), api.nvim_win_get_cursor(S.input_win)
+  local restored = table.concat(texts, '\n\n')
+  if existing ~= '' then set_input(existing .. '\n\n' .. restored, cursor)
+  else set_input(restored) end
+  queue_save()
+end
+local function fail_server(server, message)
+  if not current(server) then return end
+  S.generation = S.generation + 1
+  S.server, S.active, S.loading, S.switching = nil, nil, false, false
+  S.queued = 0
+  if server.process then pcall(function() server.process:kill(15) end) end
+  status(message)
+end
+local function tool_message(value)
+  local message
+  for _, item in ipairs(S.messages) do
+    if item.role == 'tool' and item.tool_call_id == value.tool_call_id then message = item; break end
+  end
+  if not message then
+    message = { role = 'tool', tool_call_id = value.tool_call_id, text = '' }
+    S.messages[#S.messages + 1] = message
+  end
+  message.name = value.name or message.name
+  message.args = value.args or message.args
+  if type(value.text) == 'string' then message.text = value.text end -- cumulative, never append
+  message.is_error = value.is_error == true
+  message.running = value.event ~= 'tool_end'
+end
+local function event(server, raw)
+  if not current(server) or raw:match('^%s*$') then return end
   local ok, value = pcall(vim.json.decode, raw)
-  if not ok or type(value) ~= 'table' then stream_error(stream, '后端返回无效 NDJSON'); return end
-  if value.event == 'delta' and type(value.text) == 'string' then
-    stream.entry.answer = stream.entry.answer .. value.text
-    schedule_flush(stream)
-  elseif value.event == 'status' and type(value.text) == 'string' then
-    status(value.text)
-  elseif value.event == 'done' and type(value.entry) == 'table'
-      and value.entry.id ~= nil and value.entry.id ~= vim.NIL
-      and type(value.entry.question) == 'string' and type(value.entry.answer) == 'string'
-      and type(value.entry.web_search) == 'boolean' then
-    stream.terminal = true
-    remember(value.entry)
-    S.selected_id = value.entry.id
-    render(value.entry)
-    S.loading = false
-    S.active = nil
-    status('回答完成 [' .. mode_label(value.entry.web_search) .. ']')
+  if not ok or type(value) ~= 'table' then fail_server(server, '后端返回无效 NDJSON'); return end
+  local pending = value.id and server.pending[value.id]
+  if value.event == 'snapshot' then
+    S.messages = type(value.messages) == 'table' and value.messages or {}
+    S.streaming = nil
+    S.session = type(value.session) == 'table' and value.session or nil
+    S.session_id = S.session and S.session.id or nil
+    server.session_id = S.session_id
+    S.selected_id = nil
+    S.web_search = value.web_search == true
+    server.busy = value.loading == true
+    S.loading = server.busy
+    for _, operation in pairs(server.pending) do
+      if operation.question then S.loading = true; break end
+    end
+    if not S.loading then S.queued = 0 end
+    S.switching = false
+    if S.session then
+      local found = false
+      for i, session in ipairs(S.sessions) do
+        if session.id == S.session_id then S.sessions[i] = S.session; found = true; break end
+      end
+      if not found then table.insert(S.sessions, 1, S.session) end
+    end
+    if not S.search then render_messages(server.restore_scroll); server.restore_scroll = nil end
+    status(S.loading and '任务运行中 · Enter 排队 / Ctrl+C 取消' or '会话已就绪 · Enter 继续提问')
+    if pending then
+      server.pending[value.id] = nil
+      if pending.after_snapshot then pending.after_snapshot() end
+    end
     queue_save()
+  elseif value.event == 'accepted' then
+    if pending and pending.question then
+      server.busy, S.loading = true, true
+      if api.nvim_buf_get_changedtick(S.input_buf) == pending.tick then set_input('') end
+      if value.disposition == 'queued' then S.queued = S.queued + 1 end
+      server.pending[value.id] = nil
+      status(value.disposition == 'queued' and ('已排队 ' .. S.queued .. ' 条 · Ctrl+C 取消任务和队列')
+        or '任务运行中 · Enter 排队 / Ctrl+C 取消')
+      queue_save()
+    elseif value.id then
+      server.pending[value.id] = nil
+    end
+  elseif value.event == 'message_start' then
+    if value.role == 'assistant' then
+      local message = { role = 'assistant', text = '' }
+      S.messages[#S.messages + 1] = message
+      S.streaming = message
+    end
+    schedule_flush(server)
+  elseif value.event == 'delta' and type(value.text) == 'string' then
+    if not S.streaming then
+      S.streaming = { role = 'assistant', text = '' }
+      S.messages[#S.messages + 1] = S.streaming
+    end
+    S.streaming.text = S.streaming.text .. value.text
+    schedule_flush(server)
+  elseif value.event == 'message_end' and type(value.message) == 'table' then
+    local message = value.message
+    if message.role == 'assistant' and S.streaming then
+      for index, item in ipairs(S.messages) do
+        if item == S.streaming then S.messages[index] = message; break end
+      end
+      S.streaming = nil
+    elseif message.role == 'tool' then
+      tool_message(vim.tbl_extend('force', message, { event = 'tool_end' }))
+    else S.messages[#S.messages + 1] = message end
+    schedule_flush(server)
+  elseif value.event == 'tool_start' or value.event == 'tool_update' or value.event == 'tool_end' then
+    tool_message(value)
+    schedule_flush(server)
+  elseif value.event == 'status' then
+    status(tostring(value.text or ''))
+  elseif value.event == 'settled' then
+    -- The following snapshot is the completion barrier. A user may submit
+    -- between callbacks; that older idle snapshot must not clear a new prompt.
+    server.busy, S.queued = false, 0
+    status(value.aborted and '已取消任务 · 可以继续提问' or '任务完成 · Enter 继续提问')
+    schedule_flush(server)
+    queue_save()
+  elseif value.event == 'queue_cleared' then
+    S.queued = 0
+    restore_queue(value.messages)
   elseif value.event == 'error' then
-    stream_error(stream, tostring(value.error or '生成失败'))
+    if pending then
+      server.pending[value.id] = nil
+      if pending.after_snapshot then S.switching = false end
+      if pending.question then
+        S.loading = server.busy == true
+        for _, operation in pairs(server.pending) do
+          if operation.question then S.loading = true; break end
+        end
+      end
+    end
+    status(tostring(value.error or '后端请求失败'))
+  elseif value.event == 'closed' then
+    server.closed = true
+    S.loading, S.queued = false, 0
   else
-    stream_error(stream, '后端返回无效事件')
+    fail_server(server, '后端返回无效事件')
   end
 end
-local function consume(stream, chunk, eof)
-  if not current(stream) then return end
-  stream.raw = stream.raw .. (chunk or '')
-  -- Keep arbitrary bytes (including split UTF-8 codepoints) until a whole JSON
-  -- line arrives. text=false also prevents libuv from normalizing chunk tails.
+local function consume(server, chunk, eof)
+  if not current(server) then return end
+  server.raw = server.raw .. (chunk or '')
+  -- Buffer bytes until LF, including arbitrary splits inside UTF-8 codepoints.
   while true do
-    local newline = stream.raw:find('\n', 1, true)
+    local newline = server.raw:find('\n', 1, true)
     if not newline then break end
-    local raw = stream.raw:sub(1, newline - 1):gsub('\r$', '')
-    stream.raw = stream.raw:sub(newline + 1)
-    event(stream, raw)
-    if not current(stream) then return end
+    local raw = server.raw:sub(1, newline - 1):gsub('\r$', '')
+    server.raw = server.raw:sub(newline + 1)
+    event(server, raw)
+    if not current(server) then return end
   end
-  if eof and stream.raw ~= '' then event(stream, stream.raw); stream.raw = '' end
+  if eof and server.raw ~= '' then event(server, server.raw); server.raw = '' end
+end
+local function start_server()
+  if S.server then return S.server end
+  S.generation = S.generation + 1
+  local server = { generation = S.generation, raw = '', pending = {} }
+  S.server, S.active = server, server
+  local command = backend_command()
+  command[#command + 1] = 'serve'
+  local ok, process = pcall(vim.system, command, {
+    cwd = vim.env.QUICK_ASK_ROOT, stdin = true, text = false,
+    stdout = function(err, data)
+      vim.schedule(function()
+        if not current(server) then return end
+        if err then fail_server(server, '读取后端结果失败'); return end
+        consume(server, data, data == nil)
+      end)
+    end,
+  }, function(result)
+    vim.schedule(function()
+      if not current(server) then return end
+      consume(server, nil, true)
+      if not current(server) then return end
+      -- Provider stderr can include private diagnostics; never show it verbatim.
+      fail_server(server, server.closed and '后端已关闭' or ('后端已退出 (' .. tostring(result.code) .. ')'))
+    end)
+  end)
+  if not ok then fail_server(server, '无法启动 Python 后端'); return nil end
+  server.process = process
+  return server
+end
+local function send(payload, pending)
+  local server = start_server()
+  if not server then return end
+  S.request_id = S.request_id + 1
+  payload.id = S.request_id
+  server.pending[payload.id] = pending or {}
+  local ok = pcall(function() server.process:write(vim.json.encode(payload) .. '\n') end)
+  if not ok then fail_server(server, '无法发送后端请求'); return end
+  return payload.id
+end
+local function open_session(op, session_id, after_snapshot, scroll)
+  S.switching = true
+  local id = send({ op = op, session_id = session_id or vim.NIL, web_search = S.web_search }, {
+    after_snapshot = after_snapshot or function() end,
+  })
+  if id and S.server then S.server.restore_scroll = scroll end
 end
 function M.submit()
   if not S.initialized or S.search then return end
   vim.cmd.stopinsert()
   local question = draft()
   if question:match('^%s*$') then return end
-  invalidate()
-  local stream = {
-    generation = S.generation, tick = api.nvim_buf_get_changedtick(S.input_buf), raw = '',
-    entry = { question = question, answer = '', web_search = S.web_search, sources = {} }, topline = 1,
-  }
-  S.active = stream
-  S.loading = true
-  status('生成中 [' .. mode_label(S.web_search) .. '] · Ctrl+C 取消 / Enter 替换提交')
-  queue_save()
-  local ok, process = pcall(vim.system, backend_command(), {
-    cwd = vim.env.QUICK_ASK_ROOT,
-    stdin = vim.json.encode({ op = 'ask', question = question, web_search = S.web_search }) .. '\n',
-    text = false,
-    stdout = function(err, data)
-      vim.schedule(function()
-        if not current(stream) then return end
-        if err then stream_error(stream, '读取生成结果失败: ' .. tostring(err)); return end
-        consume(stream, data, data == nil)
-      end)
-    end,
-  }, function(result)
-    vim.schedule(function()
-      if not current(stream) then return end
-      consume(stream, nil, true)
-      if not current(stream) then return end
-      local detail = (result.stderr or ''):gsub('^%s+', ''):gsub('%s+$', ''):sub(1, 400)
-      stream_error(stream, detail ~= '' and detail or ('后端未返回 done (' .. tostring(result.code) .. ')'))
-    end)
-  end)
-  if ok then stream.process = process else stream_error(stream, '无法启动 Python 后端') end
+  if S.switching then status('正在切换会话，请稍候'); return end
+  local pending = { question = question, tick = api.nvim_buf_get_changedtick(S.input_buf), was_busy = S.loading }
+  local function prompt()
+    if send({ op = 'prompt', question = question, web_search = S.web_search }, pending) then
+      S.loading = true
+      status(pending.was_busy and '正在排队后续问题' or '任务运行中 · Enter 排队 / Ctrl+C 取消')
+      queue_save()
+    end
+  end
+  -- A legacy answer is a read-only record, never context for an unrelated chat.
+  -- Wait for a successful snapshot so a failed open cannot leak the question.
+  if not S.session_id or not S.server or S.server.session_id ~= S.session_id then
+    open_session(S.selected_id and 'new' or 'open', S.session_id, prompt)
+  else prompt() end
+end
+function M.cancel()
+  if not S.initialized or not S.server then return end
+  send({ op = 'abort' })
+  status('正在取消任务和队列')
 end
 function M.control_c()
   if S.search then M.cancel_history()
   elseif S.loading then M.cancel()
   else M.submit() end
 end
+function M.new_chat()
+  if not S.initialized then return end
+  if S.loading or S.switching then status('任务运行中，请等待完成或 Ctrl+C 取消后再新建会话'); return end
+  if S.search then M.cancel_history() end
+  open_session('new')
+end
 function M.toggle_web()
   if not S.initialized then return end
+  if S.loading or S.switching then status('任务运行中，请等待完成后切换 web_search'); return end
   if S.search then M.cancel_history() end
-  invalidate()
-  S.web_search = not S.web_search
-  status('下次提问 [' .. mode_label(S.web_search) .. '] · Tab 切换 · / 历史')
-  queue_save()
+  if S.session_id then
+    local next_mode = not S.web_search
+    local function change_mode()
+      S.switching = true
+      send({ op = 'mode', web_search = next_mode }, { after_snapshot = function() end })
+    end
+    if S.server and S.server.session_id == S.session_id then change_mode()
+    else open_session('open', S.session_id, change_mode) end
+  else
+    S.web_search = not S.web_search
+    status('web_search ' .. (S.web_search and '已启用' or '已关闭') .. ' · Tab 切换')
+    queue_save()
+  end
   return S.web_search
+end
+function M.shutdown()
+  if S.shutting_down then return end
+  S.shutting_down = true
+  M.before_hide()
+  local server = S.server
+  if not server then return end
+  -- Revoke ownership before waiting: queued stdout/exit/timer callbacks from
+  -- this process can never mutate a later server or the draft during exit.
+  S.generation = S.generation + 1
+  S.server, S.active, S.loading = nil, nil, false
+  pcall(function() server.process:write(vim.json.encode({ op = 'shutdown' }) .. '\n') end)
+  pcall(function() server.process:write(nil) end)
+  local ok, result = pcall(function() return server.process:wait(2500) end)
+  if not ok or not result or result.code == 124 then
+    pcall(function() server.process:kill(15) end)
+    pcall(function() server.process:wait(500) end)
+    pcall(function() server.process:kill(9) end)
+  end
 end
 function M.scroll(direction)
   if not valid_win(S.result_win) then return end
@@ -270,7 +447,6 @@ function M.scroll(direction)
     local key = api.nvim_replace_termcodes(direction > 0 and '<C-d>' or '<C-u>', true, false, true)
     vim.cmd.normal({ args = { key }, bang = true })
   end)
-  if S.active then S.active.topline = result_scroll() end
   queue_save()
 end
 
@@ -314,7 +490,8 @@ local function render_history()
   for index, entry in ipairs(search.entries) do
     search.rows[index] = #content + 1
     content[#content + 1] = (index == search.index and '▶ ' or '  ') .. tostring(index) .. '. ['
-      .. mode_label(entry.web_search) .. '] ' .. (entry.question or ''):gsub('[\r\n]+', ' ')
+      .. (entry.kind == 'session' and '会话 · ' or '旧记录 · ') .. mode_label(entry.web_search) .. '] '
+      .. (entry.title or entry.question or ''):gsub('[\r\n]+', ' ')
     content[#content + 1] = '  ' .. snippet(entry, search.query, search.snippets)
     content[#content + 1] = ''
   end
@@ -325,7 +502,6 @@ end
 function M.cancel_history()
   local search = S.search
   if not search then return end
-  invalidate()
   S.search = nil
   S.prompting = false
   local saved = search.saved
@@ -349,35 +525,39 @@ function M.select_history()
   if not S.search or not S.search.entries then return end
   local entry = S.search.entries[S.search.index]
   if not entry then return end
-  invalidate()
+  if S.loading or S.switching then status('任务运行中，请等待完成后切换会话'); return end
   S.search = nil
-  S.selected_id = entry.id
-  S.web_search = entry.web_search == true
-  -- Load's history is complete, but retain entries returned by newer searches too.
-  local found = false
-  for _, old in ipairs(S.entries) do if old.id == entry.id then found = true; break end end
-  if not found then S.entries[#S.entries + 1] = entry end
-  set_input(entry.question)
-  render(entry)
   api.nvim_set_current_win(S.input_win)
-  status('已恢复历史 [' .. mode_label(entry.web_search) .. '] · Enter 可重新提问')
-  queue_save()
+  if entry.kind == 'session' then
+    -- Opening history replaces only the transcript. Keep the unsent draft.
+    open_session('open', entry.id)
+  else
+    S.selected_id, S.session_id, S.session = entry.id, nil, nil
+    S.messages, S.streaming = {}, nil
+    S.web_search = entry.web_search == true
+    local found = false
+    for _, old in ipairs(S.entries) do if old.id == entry.id then found = true; break end end
+    if not found then S.entries[#S.entries + 1] = entry end
+    set_input(entry.question)
+    render(entry)
+    status('已恢复旧记录 · Enter 在新会话中重新提问')
+    queue_save()
+  end
 end
 function M.open_history()
   if not S.initialized then return end
+  if S.loading or S.switching then status('任务运行中，请等待完成后切换会话'); return end
   if S.search then M.cancel_history() end
   local search = {
     saved = snapshot(), display = vim.deepcopy(S.display),
     content = api.nvim_buf_get_lines(S.result_buf, 0, -1, false),
     win = api.nvim_get_current_win(), message = S.message,
   }
-  invalidate()
-  search.generation = S.generation
   S.search = search
   S.prompting = true
   edit_im(true)
   vim.ui.input({ prompt = '历史 / ', default = S.history_query }, function(query)
-    if S.search ~= search or search.generation ~= S.generation then return end
+    if S.search ~= search then return end
     S.prompting = false
     edit_im(false)
     if query == nil then M.cancel_history(); return end
@@ -401,8 +581,8 @@ local function dismiss_history_on_edit()
   S.history_query, S.display = search.saved.history_query, search.display
   local revision = S.result_revision
   vim.schedule(function()
-    -- More keystrokes can change generation before this scheduled restoration;
-    -- only a newer rendered view should supersede it.
+    -- More keystrokes can arrive before this scheduled restoration; only a
+    -- newer rendered view should supersede it.
     if S.result_revision == revision and not S.search then
       set_result(search.content, search.saved.result_scroll)
     end
@@ -416,12 +596,11 @@ function M.on_show()
   vim.cmd.stopinsert()
   edit_im(false)
   if valid_win(S.input_win) then api.nvim_set_current_win(S.input_win) end
-  status('Enter 提问 · Ctrl+C 提问/取消 · Tab 普通/联网 · / 历史 · :q 隐藏')
+  status(S.loading and '任务运行中 · Enter 排队 / Ctrl+C 取消' or 'Enter 提问 · Tab web_search · / 历史 · :q 隐藏')
   return 1
 end
 function M.before_hide()
   if not S.initialized then return 0 end
-  invalidate()
   if S.search then M.cancel_history() end
   if not M.save_state() then return 0 end
   if S.visible and S.previous_im then run_im({ S.previous_im == 2 and '-o' or '-c' }) end
@@ -440,8 +619,11 @@ function M.hide()
 end
 function M.statusline()
   local mode = vim.fn.mode(1):sub(1, 1) == 'i' and 'INSERT' or 'NORMAL'
-  local message = (S.message or 'Quick Ask'):gsub('%%', '%%%%'):gsub('[\r\n]', ' ')
-  return ' ' .. mode .. ' [' .. mode_label(S.web_search) .. '] │ ' .. message
+  local session = S.session or {}
+  local activity = S.loading and ('运行中' .. (S.queued > 0 and ' / 排队 ' .. S.queued or '')) or '空闲'
+  local context = (session.title or '新会话') .. ' · ' .. (session.cwd or S.config.workspace or '~/agent-workspace')
+  local message = (context .. ' │ ' .. (S.message or 'Quick Agent')):gsub('%%', '%%%%'):gsub('[\r\n]', ' ')
+  return ' ' .. mode .. ' [' .. mode_label(S.web_search) .. ' / ' .. activity .. '] │ ' .. message
 end
 local function layout()
   vim.cmd('silent! only')
@@ -472,7 +654,7 @@ local function layout()
   vim.wo[S.input_win].winfixheight = true
   vim.wo[S.input_win].statusline = '%!v:lua.QuickAskStatusline()'
   vim.wo[S.result_win].scrolloff = 0
-  vim.wo[S.result_win].statusline = ' Enter 提问   Ctrl+C 提问/取消   Tab 普通/联网   / 历史   Ctrl+D/U 滚动   :q 隐藏'
+  vim.wo[S.result_win].statusline = ' Enter 提问/排队   Ctrl+C 取消   Tab web_search   / 历史   :NewChat   Ctrl+D/U 滚动   :q 隐藏'
   vim.bo[S.result_buf].filetype = 'markdown'
   vim.bo[S.result_buf].syntax = 'markdown'
   vim.bo[S.result_buf].readonly = true
@@ -482,7 +664,7 @@ function M.setup()
   if S.initialized then return M end
   _G.QuickAskStatusline = M.statusline
   vim.opt.title = true
-  vim.opt.titlestring = 'Quick Ask'
+  vim.opt.titlestring = 'Quick Agent'
   vim.opt.hidden = true
   vim.opt.laststatus = 2
   vim.opt.showmode = false
@@ -500,15 +682,27 @@ function M.setup()
   local response, err = request({ op = 'load' })
   local saved = {}
   if response then
-    S.entries, S.config, saved = response.entries or {}, response.config or {}, response.state or {}
+    S.entries, S.sessions, S.config, saved = response.entries or {}, response.sessions or {}, response.config or {}, response.state or {}
   end
   S.selected_id = saved.selected_id ~= vim.NIL and saved.selected_id or nil
+  S.session_id = saved.session_id ~= vim.NIL and saved.session_id or nil
+  if S.session_id then
+    local indexed = false
+    for _, session in ipairs(S.sessions) do
+      if session.id == S.session_id then indexed = true; break end
+    end
+    -- Pi allocates an id before its first persisted message. An empty chat
+    -- isn't indexed yet; restarting it should keep the draft ready for a new
+    -- chat rather than repeatedly attempting to resume an unknown id.
+    if not indexed then S.session_id = nil end
+  end
   S.web_search = saved.web_search == true
   S.history_query = type(saved.history_query) == 'string' and saved.history_query or ''
   set_input(type(saved.draft) == 'string' and saved.draft or '', saved.cursor or { 1, 0 })
-  render(selected_entry(), saved.result_scroll)
+  if S.selected_id then render(selected_entry(), saved.result_scroll) else render_messages(saved.result_scroll) end
   S.initialized = true
-  status(err or 'Enter 提问 · Ctrl+C 提问/取消 · Tab 普通/联网 · / 历史')
+  status(err or 'Enter 提问 · Tab web_search · / 历史 · :NewChat')
+  if S.session_id then open_session('open', S.session_id, nil, saved.result_scroll) end
   for _, buf in ipairs({ S.input_buf, S.result_buf }) do
     local function map(mode, key, action) vim.keymap.set(mode, key, action, { buffer = buf, silent = true }) end
     map('n', '/', M.open_history)
@@ -527,6 +721,7 @@ function M.setup()
     end, { buffer = S.result_buf, silent = true })
   end
   api.nvim_create_user_command('History', M.open_history, {})
+  api.nvim_create_user_command('NewChat', M.new_chat, {})
   vim.keymap.set('c', '<CR>', function()
     if vim.fn.getcmdtype() == ':' and vim.fn.getcmdline():match('^%s*q!?%s*$') then
       return '<C-u>lua require("quick_ask").hide()<CR>'
@@ -536,7 +731,6 @@ function M.setup()
   local group = api.nvim_create_augroup('QuickAskUI', { clear = true })
   api.nvim_buf_attach(S.input_buf, false, { on_lines = function()
     if not S.changing then
-      invalidate_for_edit()
       dismiss_history_on_edit()
       queue_save()
     end
@@ -545,7 +739,6 @@ function M.setup()
     group = group, buffer = S.input_buf, callback = queue_save,
   })
   api.nvim_create_autocmd('InsertEnter', { group = group, buffer = S.input_buf, callback = function()
-    invalidate_for_edit()
     dismiss_history_on_edit()
     edit_im(true)
   end })
@@ -559,7 +752,7 @@ function M.setup()
   api.nvim_create_autocmd('VimResized', { group = group, callback = function()
     if valid_win(S.input_win) then api.nvim_win_set_height(S.input_win, 3) end
   end })
-  api.nvim_create_autocmd('VimLeavePre', { group = group, callback = M.before_hide })
+  api.nvim_create_autocmd('VimLeavePre', { group = group, callback = M.shutdown })
   return M
 end
 return M

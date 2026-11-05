@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 import signal
 import sys
 import uuid
@@ -26,6 +27,10 @@ def main():
     for signum in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, cancel)
     try:
+        if sys.argv[1:] == ["serve"]:
+            action = "serve"
+            from .server import serve
+            return serve(load_config(), Store(db_path()), emit)
         request = json.load(sys.stdin)
         if not isinstance(request, dict):
             raise ValueError("请求必须是 JSON 对象")
@@ -33,8 +38,9 @@ def main():
         config = load_config()
         store = Store(db_path())
         if action == "load":
-            emit({"ok": True, "entries": store.entries(), "state": store.load_state(),
-                  "config": {"input_method": config.input_method}})
+            emit({"ok": True, "entries": store.entries(), "sessions": store.sessions(), "state": store.load_state(),
+                  "config": {"input_method": config.input_method,
+                             "workspace": str(Path(config.workspace).expanduser().resolve())}})
         elif action == "save_state":
             store.save_state(request.get("state"))
             emit({"ok": True})
@@ -62,14 +68,14 @@ def main():
         # A closing editor must not leave a model/tool process behind.
         return 1
     except (ValueError, OSError, PiError) as error:
-        if action == "ask":
+        if action in ("ask", "serve"):
             emit({"event": "error", "error": str(error)})
         else:
             emit({"ok": False, "error": str(error)})
         return 1
     except Exception:
         # Avoid dumping subprocess environments or raw provider diagnostic data.
-        if action == "ask":
+        if action in ("ask", "serve"):
             emit({"event": "error", "error": "后端处理失败"})
         else:
             emit({"ok": False, "error": "后端处理失败"})

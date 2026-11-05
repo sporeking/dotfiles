@@ -110,12 +110,14 @@ class BackendTests(unittest.TestCase):
     def test_load_default_state_and_ui_config(self):
         loaded = self.load()
         self.assertEqual(loaded["state"], DEFAULT_STATE)
-        self.assertEqual(loaded["config"], {"input_method": True})
+        workspace = str(Path("~/agent-workspace").expanduser().resolve())
+        self.assertEqual(loaded["config"], {"input_method": True, "workspace": workspace})
+        self.assertEqual(loaded["sessions"], [])
         self.write_config(ui="input_method=false\n")
-        self.assertEqual(self.load()["config"], {"input_method": False})
+        self.assertEqual(self.load()["config"], {"input_method": False, "workspace": workspace})
 
     def test_state_round_trip_preserves_byte_column(self):
-        state = {"selected_id": "previous", "draft": "中文\n草稿", "cursor": [2, 6], "result_scroll": 7,
+        state = {"selected_id": "previous", "session_id": None, "draft": "中文\n草稿", "cursor": [2, 6], "result_scroll": 7,
                  "web_search": True, "history_query": "关键词"}
         process, result = self.request({"op": "save_state", "state": state})
         self.assertEqual(process.returncode, 0, result)

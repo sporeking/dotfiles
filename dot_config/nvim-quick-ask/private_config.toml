@@ -8,5 +8,8 @@ thinking = "off"
 timeout = 180
 web_extension = ""
 
+[agent]
+workspace = "~/agent-workspace"
+
 [ui]
 input_method = true

@@ -9,5 +9,10 @@ timeout = 180
 # Empty: locate the installed pi-web-access package automatically.
 web_extension = ""
 
+# Default starting directory for NEW conversations. This is not a sandbox.
+# Commands and file tools run with your normal user's permissions.
+[agent]
+workspace = "~/agent-workspace"
+
 [ui]
 input_method = true
