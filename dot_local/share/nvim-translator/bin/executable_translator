@@ -139,12 +139,47 @@ def hide() -> None:
         lua('hl.dispatch(hl.dsp.workspace.toggle_special("translator"))')
 
 
+def window_geometry(monitor: dict) -> tuple[int, int, int, int]:
+    """Center within the monitor's logical work area, including rotated panels."""
+    width, height = monitor["width"], monitor["height"]
+    if monitor.get("transform", 0) % 2:
+        width, height = height, width
+    scale = monitor.get("scale", 1)
+    left, top, right, bottom = monitor.get("reserved", [0, 0, 0, 0])
+    available_width = width / scale - left - right
+    available_height = height / scale - top - bottom
+    # Leave room for borders/shadows and fit displays smaller than the default.
+    width = max(1, min(900, int(available_width) - 48))
+    height = max(1, min(600, int(available_height) - 48))
+    x = round(monitor["x"] + left + (available_width - width) / 2)
+    y = round(monitor["y"] + top + (available_height - height) / 2)
+    return x, y, width, height
+
+
+def place_window() -> None:
+    # A special workspace keeps its floating offsets when moving to another
+    # monitor. The map-time center rule alone cannot keep such offsets in bounds.
+    windows = clients()
+    if len(windows) != 1:
+        raise RuntimeError("Expected one translator window while positioning")
+    window = windows[0]
+    monitor = next((m for m in hypr_json("monitors") if m["id"] == window["monitor"]), None)
+    if monitor is None:
+        raise RuntimeError("Translator monitor is unavailable; try showing it again")
+    x, y, width, height = window_geometry(monitor)
+    selector = json.dumps("address:" + window["address"])
+    lua(f'hl.dispatch(hl.dsp.window.resize({{window={selector},x={width},y={height},relative=false}})); '
+        f'hl.dispatch(hl.dsp.window.move({{window={selector},x={x},y={y},relative=false}}))')
+
+
 def show() -> None:
     ensure_started()
     if not visible():
         if not notify_nvim("on_show"):
             raise RuntimeError("Translator UI is not responding")
         lua('hl.dispatch(hl.dsp.workspace.toggle_special("translator"))')
+    # Recompute after the workspace has moved, using its actual destination.
+    place_window()
     # Native focus selector is app-specific; no ordinary Kitty is involved.
     lua('hl.dispatch(hl.dsp.focus({window="class:^nvim-translator$"}))')
 

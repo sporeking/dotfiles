@@ -42,7 +42,7 @@ dofile("/absolute/path/to/translator/hyprland/translator.lua")
 
 然后 `hyprctl reload`，并执行一次 `python3 bin/translator start`。之后每次登录由 `hyprland.start` 自动启动。配置片段默认绑定 `ALT + T`，与本机的主修饰键一致，可在片段中修改。Hyprland 的 `SUPER` 指 Win 键，与 `ALT` 是不同按键。也可运行 `python3 bin/translator config` 获取包含实际绝对路径的配置语句，二选一，避免重复绑定。
 
-每次启动都会安装仅匹配 `nvim-translator` app-id 的浮动规则：900×600、居中、静默放入 `special:translator`。调出会取得键盘焦点，隐藏后交还原桌面。跨屏时特殊工作区的显示遵循 Hyprland 的原生行为。
+启动时安装仅匹配 `nvim-translator` app-id 的浮动规则，静默放入 `special:translator`。每次调出时，按窗口实际所在屏幕的逻辑可用区域重新居中：计算包含旋转方向、缩放比例和面板预留空间，四周留出 24 逻辑像素，以 900×600 为默认上限，小屏幕按可用空间缩小。特殊工作区跨屏时会保留旧屏的浮动偏移，因此不能只依赖初次创建窗口时的居中规则。调出会取得键盘焦点，隐藏后交还原桌面。
 
 ### 通过 dotfiles 同步
 
@@ -149,7 +149,7 @@ flowchart TD
     N -->|"新词条自动发音 / p 重播"| A["mpv"]
 ```
 
-启动器按专用 app-id 查找或创建浮动窗口，将其放在 `special:translator` 工作区。Neovim 使用独立的 `NVIM_APPNAME`、初始化入口和 socket；启动器用 headless RPC 通知它准备显示或保存状态，再切换工作区。`:q` 保存并隐藏，`stop` 会结束实例并等待窗口退出。
+启动器按专用 app-id 查找或创建浮动窗口，将其放在 `special:translator` 工作区。显示工作区后，重新读取窗口实际所在的显示器，将物理分辨率转换为旋转、缩放后的逻辑工作区，扣除面板预留边距，再按窗口地址发送绝对尺寸和全局位置命令。这样切屏不会沿用旧屏的浮动偏移。Neovim 使用独立的 `NVIM_APPNAME`、初始化入口和 socket；启动器用 headless RPC 通知它准备显示或保存状态，再切换工作区。`:q` 保存并隐藏，`stop` 会结束实例并等待窗口退出。
 
 Neovim 上方的可编辑缓冲区接收原生 Vim 操作，下方的只读缓冲区显示结果。查询通过 `vim.system` 异步启动 Python 后端，每次向 stdin 写一个 JSON 请求，从 stdout 读一个 JSON 响应；后端完成请求后退出。请求代次和缓冲区变更检查可防止旧响应覆盖新输入；切换方向也会使旧请求失去界面更新权限。`j/k` 读取已加载的历史记录，编辑中的草稿单独保存。
 
@@ -179,6 +179,6 @@ NVIM_APPNAME=nvim-translator-test NVIM_LOG_FILE=/tmp/nvim-translator-test.log \
 
 后端协议测试使用本地 HTTP 服务验证请求体、认证头、各协议响应解析、失败处理和持久化，不需要付费调用。Neovim smoke 测试使用隔离数据。真实 LLM 效果仍需配置自己的服务后验证。
 
-需要验证真实桌面时，可关闭现有翻译窗口后运行 `python3 tests/desktop_smoke.py`。它会暂时显示测试窗口，实际经 Hyprland 的快捷键启动环境切换显示/隐藏，再联网查询两个词条，并检查隐藏、重启恢复和其他窗口布局；测试数据独立保留在项目 `.runtime` 下。该测试不能与正在使用的翻译实例同时运行。
+需要验证真实桌面时，可关闭现有翻译窗口后运行 `python3 tests/desktop_smoke.py`。它会暂时显示测试窗口，实际经 Hyprland 的快捷键启动环境切换显示/隐藏，再联网查询两个词条，并在所有已连接屏幕间来回唤出，检查旋转与缩放后的窗口边界、居中、隐藏、重启恢复和其他窗口布局；测试数据独立保留在项目 `.runtime` 下。该测试不能与正在使用的翻译实例同时运行。
 
-本机验证结果：46 项 Python 测试、Neovim smoke、真实 Hyprland 桌面测试均通过，覆盖双向缓存、旧库迁移、Normal / Insert 的 Tab 与方向恢复；词典真实联网成功，发音音频通过 mpv 的静音输出解码验证。未使用真实 LLM 凭据或发出付费请求。
+本机验证结果：56 项 Python 测试通过，覆盖双向缓存、旧库并发初始化与迁移及旋转 / 缩放屏幕定位；Neovim smoke 已通过，覆盖 Normal / Insert 的 Tab 与方向恢复。本次在实际 Hyprland 双屏复现旧版越界，并验证修复后的两屏位置、边界及其他窗口布局。完整桌面脚本须在会话解锁后运行，锁屏会阻止键盘焦点切换。词典真实联网成功，发音音频通过 mpv 的静音输出解码验证。未使用真实 LLM 凭据或发出付费请求。

@@ -55,12 +55,19 @@ def desktop_toggle(expected_visible):
     # even though a direct subprocess test from a terminal succeeds.
     command = shlex.join(["env", *[f"{k}={v}" for k, v in OVERRIDES.items()],
                           "python3", str(ROOT / "bin/translator"), "toggle"])
+    log = DATA / "desktop-toggle.log"
+    command += " >" + shlex.quote(str(log)) + " 2>&1"
     run(["hyprctl", "eval", "hl.dispatch(hl.dsp.exec_cmd(" + json.dumps(command) + "))"])
-    wait_for(lambda: json.loads(ctl("status"))["visible"] == expected_visible,
-             "compositor shortcut toggle")
-    if expected_visible:
-        wait_for(lambda: json.loads(run(["hyprctl", "-j", "activewindow"])).get("class") == "nvim-translator",
-                 "translator keyboard focus")
+    try:
+        wait_for(lambda: json.loads(ctl("status"))["visible"] == expected_visible,
+                 "compositor shortcut toggle")
+        if expected_visible:
+            wait_for(lambda: json.loads(run(["hyprctl", "-j", "activewindow"])).get("class") == "nvim-translator",
+                     "translator keyboard focus")
+    except AssertionError as error:
+        detail = log.read_text() if log.exists() else "launcher log was not created"
+        locked = run(["hyprctl", "-j", "locked"])
+        raise AssertionError(str(error) + ": " + detail + "; session lock: " + locked) from error
 
 
 def windows():
@@ -71,6 +78,41 @@ def translator_windows():
     return [c for c in windows() if c.get("class") == "nvim-translator"]
 
 
+def dispatch(code):
+    result = run(["hyprctl", "eval", code])
+    assert result == "ok", result
+
+
+def fits_monitor(monitor):
+    client = translator_windows()[0]
+    if client["monitor"] != monitor["id"]:
+        return False
+    width, height = monitor["width"], monitor["height"]
+    if monitor.get("transform", 0) % 2:
+        width, height = height, width
+    left, top, right, bottom = monitor.get("reserved", [0, 0, 0, 0])
+    x0, y0 = monitor["x"] + left, monitor["y"] + top
+    x1 = monitor["x"] + width / monitor["scale"] - right
+    y1 = monitor["y"] + height / monitor["scale"] - bottom
+    x, y = client["at"]
+    width, height = client["size"]
+    return (x0 <= x and y0 <= y and x + width <= x1 and y + height <= y1
+            and abs(x + width / 2 - (x0 + x1) / 2) <= 2
+            and abs(y + height / 2 - (y0 + y1) / 2) <= 2)
+
+
+def check_monitor_switching():
+    monitors = json.loads(run(["hyprctl", "-j", "monitors"]))
+    for monitor in monitors + monitors[:1]:
+        ctl("hide")
+        dispatch("hl.dispatch(hl.dsp.focus({monitor=" + json.dumps(monitor["name"]) + "}))")
+        desktop_toggle(True)
+        wait_for(lambda: fits_monitor(monitor), "centered inside " + monitor["name"])
+        geometry = {key: translator_windows()[0][key] for key in ("at", "size")}
+        print("PASS: monitor " + monitor["name"] + " " + json.dumps(geometry), flush=True)
+    ctl("hide")
+
+
 def query(text):
     code = "(function() local m=require('translator'); vim.api.nvim_buf_set_lines(m.state.input_buf,0,-1,false,{" + json.dumps(text) + "}); m.submit(); return 1 end)()"
     rpc(code)
@@ -79,10 +121,14 @@ def query(text):
     assert actual == text, actual
 
 
+if json.loads(run(["hyprctl", "-j", "locked"])).get("locked"):
+    raise SystemExit("Unlock the desktop before the opt-in desktop test; session lock blocks keyboard focus")
 if translator_windows():
     raise SystemExit("Close the existing translator before the opt-in desktop test")
 baseline = {c["address"]: {key: c.get(key) for key in ("at", "size", "workspace", "floating")}
             for c in windows()}
+original_focus = json.loads(run(["hyprctl", "-j", "activewindow"])).get("address")
+original_cursor = json.loads(run(["hyprctl", "-j", "cursorpos"]))
 try:
     ctl("start")
     state = json.loads(ctl("status"))
@@ -140,6 +186,7 @@ try:
     assert rpc("require('translator').state.direction") == "zh-en"
     assert rpc("#require('translator').state.entries") == "2"
     print("PASS: process restart restores database history and draft", flush=True)
+    check_monitor_switching()
     current = {c["address"]: c for c in windows()}
     for address, geometry in baseline.items():
         if address in current:
@@ -149,3 +196,6 @@ try:
     print("Test data: " + str(DATA), flush=True)
 finally:
     ctl("stop")
+    if original_focus and any(c["address"] == original_focus for c in windows()):
+        dispatch("hl.dispatch(hl.dsp.focus({window=" + json.dumps("address:" + original_focus) + "}))")
+    dispatch("hl.dispatch(hl.dsp.cursor.move({x=" + str(original_cursor["x"]) + ",y=" + str(original_cursor["y"]) + "}))")

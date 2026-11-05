@@ -374,7 +374,7 @@ source ~/.zshrc
 
 **使用方法**：`Alt+T` 调出，`Tab` 切换英译中 / 中译英，`i` 编辑，`Ctrl+C` 查询，`j/k` 翻历史，`:q` 保存并隐藏；登录后隐藏启动。切方向保留草稿，按提交键后才查询；中译英使用配置的 LLM。
 
-**实现方式**：Hyprland 管理专用浮动工作区，Python 启动器控制独立 Kitty / Neovim 界面，Python 后端接入有道词典和四种 LLM 协议，SQLite 保存查询与界面状态。详见[调用流程和源码入口](dot_local/share/nvim-translator/README.md#实现方式)。
+**实现方式**：Hyprland 管理专用浮动工作区，Python 启动器控制独立 Kitty / Neovim 界面，每次调出按目标屏幕的旋转、缩放和可用区域调整大小并居中。Python 后端接入有道词典和四种 LLM 协议，SQLite 保存查询与界面状态。详见[调用流程和源码入口](dot_local/share/nvim-translator/README.md#实现方式)。
 
 - 程序：`~/.local/share/nvim-translator/`（源：`dot_local/share/nvim-translator/`）。
 - 入口：`~/.local/bin/translator`；可用 `show / hide / start / stop / status`。
