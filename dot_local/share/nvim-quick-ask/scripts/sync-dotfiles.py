@@ -49,7 +49,7 @@ def main():
         parser.error("--dotfiles must be a Git checkout/worktree")
     package = repo / "dot_local/share/nvim-quick-ask"
     files = [Path(name) for name in ("README.md", "INTERFACE.md", "config.toml.example", "bin/quick-ask", "scripts/sync-dotfiles.py")]
-    files.extend(Path(name) for name in ("extensions/vim-navigation.ts", "tests/test_launcher.py", "tests/native_pi_smoke.py", "tests/desktop_smoke.py"))
+    files.extend(Path(name) for name in ("extensions/vim-navigation.ts", "kitty/copy.conf", "kitty/copy.lua", "tests/test_launcher.py", "tests/native_pi_smoke.py", "tests/desktop_smoke.py"))
     files.extend(path.relative_to(ROOT) for path in (ROOT / "hyprland").glob("*.lua") if path.is_file())
     for relative in RETIRED_FILES:
         retired = package / relative
@@ -66,6 +66,9 @@ def main():
         '#!/bin/sh\nexec python3 "${HOME:?}/.local/share/nvim-quick-ask/bin/quick-ask" "$@"\n'
     ).encode()
     outputs[repo / "dot_config/nvim-quick-ask/private_config.toml"] = public_config(args.config)
+    # Both entry points use the same physical extension, which Pi deduplicates.
+    outputs[repo / "dot_pi/agent/extensions/symlink_vim-navigation.ts"] = b"../../../.local/share/nvim-quick-ask/extensions/vim-navigation.ts\n"
+    outputs[repo / "dot_config/kitty/symlink_pi-copy.conf"] = b"../../.local/share/nvim-quick-ask/kitty/copy.conf\n"
     changed = 0
     for path, content in outputs.items():
         if path.exists() and path.read_bytes() == content:

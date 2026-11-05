@@ -29,6 +29,25 @@
 
 在 Insert 输入 `/new` 新建会话、`/resume` 恢复会话、`/model` 换模型、`/quit` 退出。`Ctrl+G` 使用 Pi 原生外部编辑器，可在 Pi 配置 `externalEditor` 或设置 `$EDITOR` 为 Neovim。快捷键帮助用 `/hotkeys`。
 
+## 普通终端 Pi 与键盘复制
+
+同一扩展通过 `~/.pi/agent/extensions/vim-navigation.ts` 的符号链接全局自动加载。在任意目录运行 `pi`，默认 fullscreen 界面即可使用上述 Vim 浏览；已有 Pi 运行 `/reload` 后加载。普通终端仍使用当前工作目录和 Pi 原有会话目录。悬浮窗口显式加载同一真实文件，Pi 会去重，不会安装两份编辑器。
+
+复制整条上一条回答使用 Pi 原生 `Ctrl+X` 或 `/copy`。需要选取一部分文字时，在 Kitty 中按 `Ctrl+Shift+H` 打开只读 Neovim 复制视图：
+
+| 按键 | 功能 |
+| --- | --- |
+| `h/j/k/l`、`w/b`、`gg/G` | 移动到要复制的位置 |
+| `v` / `V` / `Ctrl+V` | 按字符 / 按整行 / 按矩形选择 |
+| `y` / `yy` | 将选区 / 当前行复制到系统剪贴板 |
+| `/`、`n/N` | 搜索及跳转匹配 |
+| `Esc` | 取消选区 |
+| `q` | 返回原终端，Pi 任务继续运行 |
+
+复制视图使用 Kitty 自带 scrollback overlay，独立于 Pi，也适用于普通终端输出。它是当前终端画面的快照；Pi fullscreen 自行管理未显示的历史，因此跨多屏或整条回答请用 Pi 原生复制，或先在 Pi 中滚到需要的片段。视图不修改输入草稿，不发送消息，不运行 agent，不保存文本或编辑历史。
+
+依赖 Neovim 和 Wayland 的 `wl-clipboard`。Kitty 配置需 `include pi-copy.conf`，该链接指向 [复制视图入口](kitty/copy.conf)；[只读配置](kitty/copy.lua)移除 ANSI 样式控制码并启用系统剪贴板，不加载用户的 Neovim 插件。已有 Kitty 用 `Ctrl+Shift+F5` 重载配置，新窗口自动生效。
+
 ## 工作目录、权限与数据
 
 默认工作目录是 `~/agent-workspace`。配置在 `~/.config/nvim-quick-ask/config.toml`：
@@ -59,7 +78,8 @@ workspace = "~/agent-workspace"
 
 ```sh
 python3 scripts/sync-dotfiles.py --dotfiles /path/to/dotfiles
-chezmoi --source /path/to/dotfiles apply ~/.local/share/nvim-quick-ask ~/.local/bin/quick-ask ~/.config/nvim-quick-ask
+chezmoi --source /path/to/dotfiles apply ~/.local/share/nvim-quick-ask ~/.local/bin/quick-ask ~/.config/nvim-quick-ask ~/.pi/agent/extensions/vim-navigation.ts ~/.config/kitty/pi-copy.conf
+# 在 Kitty 配置中 include pi-copy.conf，然后 Ctrl+Shift+F5 重载。
 quick-ask start
 ```
 
@@ -68,6 +88,7 @@ quick-ask start
 ```sh
 python3 -m unittest discover -s tests -p test_launcher.py
 python3 tests/native_pi_smoke.py
+python3 tests/native_pi_smoke.py --global  # 使用已部署的全局自动加载；不显式传导航扩展
 # 桌面验证先关闭已有窗口，不调用模型；测试后可重新 quick-ask start。
 python3 tests/desktop_smoke.py
 ```

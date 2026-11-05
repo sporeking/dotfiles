@@ -330,7 +330,7 @@ pi 的可同步配置由以下文件管理：
 在新机器运行 `chezmoi apply` 后，安装与本机一致版本的 pi 和插件依赖：
 
 ```bash
-npm install -g @earendil-works/pi-coding-agent@0.80.6
+npm install -g @earendil-works/pi-coding-agent@1.5.0
 cd ~/.pi/agent/npm && npm ci
 ```
 
@@ -342,10 +342,14 @@ source ~/.zshrc
 
 `models.json` 仅引用 `$SPOREKING_GPT_API_KEY` 和 `$SPOREKING_GROK_API_KEY`；`auth.json`、会话、运行历史和 context-mode 数据库均不受管理，不能提交。
 
+Pi 1.5.0 的普通终端界面也会全局加载 [Vim 浏览扩展](dot_local/share/nvim-quick-ask/extensions/vim-navigation.ts)：`Esc` 后 `j/k` 滚动、`Ctrl+U/D` 翻半页、`gg/G` 跳转、`i` 继续输入。普通 Pi 的工作目录和会话目录保持原有规则；已打开的 Pi 执行 `/reload` 加载扩展。整条回答用 Pi 原生 `Ctrl+X` 或 `/copy` 复制。
+
 ### Kitty
 
 `~/.config/kitty/kitty.conf` + `current-theme.conf`。  
 中文字体推荐：**LXGW WenKai Mono / LXGW ZhenKai**（需系统已安装）。
+
+`Ctrl+Shift+H` 打开只读 Neovim 复制视图：`v/V/Ctrl+V` 选择、`y` 复制到系统剪贴板、`q` 返回。通过 `pi-copy.conf` 引入 [复制配置](dot_local/share/nvim-quick-ask/kitty/copy.lua)，不加载用户 Neovim 插件，也不改写终端内容。适用于终端 scrollback；Pi fullscreen 内未显示的历史需先滚动出来，或直接使用 Pi 的整条回答复制。详见 [操作与实现](dot_local/share/nvim-quick-ask/README.md#普通终端-pi-与键盘复制)。已有 Kitty 用 `Ctrl+Shift+F5` 重载配置。
 
 ### Neovim (LazyVim)
 

@@ -10,6 +10,7 @@ import re
 import select
 import signal
 import struct
+import sys
 import tempfile
 import termios
 import time
@@ -31,7 +32,7 @@ export default function(pi) {
    ctx.ui.setEditorComponent((t,theme,kb)=>{tui=t;return previous(t,theme,kb)});
  });
  pi.registerShortcut('ctrl+alt+t',{description:'Test snapshot',handler:ctx=>{
-   writeFileSync(process.env.QUICK_ASK_SMOKE_STATE,JSON.stringify({draft:ctx.ui.getEditorText(),screen:tui.getScreenLines()}));
+   const scroll=tui.getPrimaryScrollView();writeFileSync(process.env.QUICK_ASK_SMOKE_STATE,JSON.stringify({draft:ctx.ui.getEditorText(),screen:tui.getScreenLines(),scrollTop:scroll.scrollTop}));
  }});
 }
 ''')
@@ -53,8 +54,9 @@ pid, fd = pty.fork()
 if pid == 0:
     os.chdir(WORKSPACE)
     os.environ.update(QUICK_ASK_SMOKE_STATE=str(STATE), TERM='xterm-256color', PI_OFFLINE='1')
-    os.execvp('pi', ['pi', '--tui-mode', 'fullscreen', '--no-extensions', '--no-mcp', '--no-skills', '--no-context-files',
-                     '--session', str(session), '-e', str(ROOT / 'extensions/vim-navigation.ts'), '-e', str(OBSERVER)])
+    navigation = [] if '--global' in sys.argv else ['--tui-mode', 'fullscreen', '--no-extensions', '-e', str(ROOT / 'extensions/vim-navigation.ts')]
+    os.execvp('pi', ['pi', *navigation, '--no-mcp', '--no-skills', '--no-context-files',
+                     '--session', str(session), '-e', str(OBSERVER)])
 fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', 32, 100, 0, 0))
 raw = bytearray()
 reaped = False
@@ -117,7 +119,9 @@ try:
     send(b'\x04')  # Ctrl+D in Normal scrolls, never exits/deletes draft
     assert min(markers(view())) > min(markers(half))
     send(b'gg')
-    assert 0 in markers(view()), 'gg must reach beginning'
+    top = view()
+    # Global resource/startup headers can occupy the entire first viewport.
+    assert top['scrollTop'] == 0, 'gg must reach beginning'
     send(b'G')
     assert 79 in markers(view()), 'G must follow transcript end'
     send(b'/NATIVE010\r\x1b')
