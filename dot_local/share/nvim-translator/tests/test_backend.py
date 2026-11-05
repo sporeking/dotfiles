@@ -536,6 +536,120 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.store.cached("hello", "zh-en"), newer)
         self.assertEqual(self.store.load()[1], {**old_state, "direction": "en-zh"})
 
+    def _trace_sqlite_errors(self, errors, wal_blocked=None):
+        real_connect = sqlite3.connect
+        class TracedConnection(sqlite3.Connection):
+            def execute(connection, sql, *args, **kwargs):
+                try:
+                    return super().execute(sql, *args, **kwargs)
+                except sqlite3.Error as exc:
+                    errors.append((sql, exc.sqlite_errorcode))
+                    if wal_blocked is not None and sql == "PRAGMA journal_mode=WAL":
+                        wal_blocked.set()
+                    raise
+        return patch("translator_backend.storage.sqlite3.connect",
+                     lambda *args, **kwargs: real_connect(*args, **kwargs, factory=TracedConnection))
+
+    def test_legacy_wal_transition_recovers_after_real_reader_releases_lock(self):
+        legacy, old_state = self._make_legacy_database()
+        reader = sqlite3.connect(self.store.path)
+        reader.execute("BEGIN")
+        reader.execute("SELECT * FROM entries").fetchall()  # Hold a real DELETE-mode shared lock.
+        errors = []
+        blocked = threading.Event()
+        with self._trace_sqlite_errors(errors, blocked), ThreadPoolExecutor(max_workers=1) as pool:
+            loading = pool.submit(self.store.load)
+            try:
+                self.assertTrue(blocked.wait(timeout=2), "WAL transition should encounter the held reader lock")
+            finally:
+                reader.rollback()
+                reader.close()
+            entries, state = loading.result(timeout=3)
+        self.assertTrue(errors)
+        self.assertTrue(all(item == ("PRAGMA journal_mode=WAL", sqlite3.SQLITE_BUSY) for item in errors))
+        self.assertEqual(entries, [{**legacy, "direction": "en-zh"}])
+        self.assertEqual(state, {**old_state, "direction": "en-zh"})
+        with self.store.connection() as connection:
+            self.assertEqual(connection.execute("PRAGMA journal_mode").fetchone()[0], "wal")
+            self.assertEqual(connection.execute("PRAGMA busy_timeout").fetchone()[0], 15000)
+
+    def test_wal_busy_timeout_is_bounded_and_preserves_legacy_data(self):
+        legacy, old_state = self._make_legacy_database()
+        reader = sqlite3.connect(self.store.path)
+        reader.execute("BEGIN")
+        reader.execute("SELECT * FROM entries").fetchall()
+        errors = []
+        started = time.monotonic()
+        try:
+            with self._trace_sqlite_errors(errors), patch("translator_backend.storage.BUSY_TIMEOUT_MS", 50):
+                with self.assertRaises(BackendError):
+                    self.store.load()
+            self.assertLess(time.monotonic() - started, 2)
+            self.assertGreaterEqual(len(errors), 2)
+            self.assertTrue(all(item == ("PRAGMA journal_mode=WAL", sqlite3.SQLITE_BUSY) for item in errors))
+            self.assertNotIn("direction", {row[1] for row in reader.execute("PRAGMA table_info(entries)")})
+        finally:
+            reader.rollback()
+            reader.close()
+        self.assertEqual(self.store.load(), ([{**legacy, "direction": "en-zh"}], {**old_state, "direction": "en-zh"}))
+
+    def test_non_busy_database_errors_are_not_retried_or_overwritten(self):
+        contents = b"This is not a SQLite database. Preserve it for diagnosis."
+        self.store.path.write_bytes(contents)
+        errors = []
+        with self._trace_sqlite_errors(errors), patch("translator_backend.storage.time.sleep") as delay:
+            with self.assertRaises(BackendError):
+                self.store.load()
+        self.assertEqual(errors, [("PRAGMA journal_mode=WAL", sqlite3.SQLITE_NOTADB)])
+        delay.assert_not_called()
+        self.assertEqual(self.store.path.read_bytes(), contents)
+
+    def test_wal_busy_recovery_retries_but_locked_does_not(self):
+        real_connect = sqlite3.connect
+        for code in (sqlite3.SQLITE_BUSY_RECOVERY, sqlite3.SQLITE_LOCKED):
+            with self.subTest(code=code):
+                self.store = Storage(self.root / f"legacy-{code}.sqlite3")
+                legacy, state = self._make_legacy_database()
+                attempts = []
+                class FirstAttemptError(sqlite3.Connection):
+                    def execute(connection, sql, *args, **kwargs):
+                        if sql == "PRAGMA journal_mode=WAL":
+                            attempts.append(sql)
+                            if len(attempts) == 1:
+                                # Deterministically exercise the extended code
+                                # also observed from real synchronized opens.
+                                error = sqlite3.OperationalError("database is locked")
+                                error.sqlite_errorcode = code
+                                raise error
+                        return super().execute(sql, *args, **kwargs)
+                with patch("translator_backend.storage.sqlite3.connect",
+                           lambda *args, **kwargs: real_connect(*args, **kwargs, factory=FirstAttemptError)):
+                    if code == sqlite3.SQLITE_BUSY_RECOVERY:
+                        self.assertEqual(self.store.load()[0], [{**legacy, "direction": "en-zh"}])
+                        self.assertEqual(len(attempts), 2)
+                    else:
+                        with self.assertRaises(BackendError):
+                            self.store.load()
+                        self.assertEqual(len(attempts), 1)
+                self.assertEqual(self.store.load()[1], {**state, "direction": "en-zh"})
+
+    def test_schema_busy_uses_normal_timeout_without_wal_retry(self):
+        self.store.save_state({**DEFAULT_STATE, "draft": "keep this draft"})
+        writer = sqlite3.connect(self.store.path)
+        writer.execute("BEGIN IMMEDIATE")
+        errors = []
+        try:
+            with self._trace_sqlite_errors(errors), patch("translator_backend.storage.BUSY_TIMEOUT_MS", 50), \
+                    patch("translator_backend.storage.time.sleep") as delay:
+                with self.assertRaises(BackendError):
+                    self.store.save_state({**DEFAULT_STATE, "draft": "must not replace it"})
+            self.assertEqual(errors, [("BEGIN IMMEDIATE", sqlite3.SQLITE_BUSY)])
+            delay.assert_not_called()
+        finally:
+            writer.rollback()
+            writer.close()
+        self.assertEqual(self.store.load()[1]["draft"], "keep this draft")
+
     def test_multiple_backend_processes_can_migrate_same_legacy_database(self):
         legacy, old_state = self._make_legacy_database()
         path = self.root / "migration.toml"

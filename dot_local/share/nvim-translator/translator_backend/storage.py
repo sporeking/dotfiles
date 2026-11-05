@@ -6,11 +6,32 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import time
 
 from .errors import BackendError
 
 DEFAULT_STATE = {"selected_id": None, "draft": "", "cursor": 0, "result_scroll": 1, "direction": "en-zh"}
 BUSY_TIMEOUT_MS = 15000
+
+
+def _enable_wal(connection):
+    # Concurrent DELETE -> WAL transitions can return SQLITE_BUSY immediately,
+    # without invoking SQLite's busy handler, including BUSY_RECOVERY. Retry only
+    # this statement's BUSY primary code, under one deadline; other SQL is unchanged.
+    deadline = time.monotonic() + BUSY_TIMEOUT_MS / 1000
+    connection.execute("PRAGMA busy_timeout=0")
+    try:
+        while True:
+            try:
+                connection.execute("PRAGMA journal_mode=WAL").fetchone()
+                return
+            except sqlite3.OperationalError as exc:
+                remaining = deadline - time.monotonic()
+                if (exc.sqlite_errorcode & 0xFF) != sqlite3.SQLITE_BUSY or remaining <= 0:
+                    raise
+                time.sleep(min(0.01, remaining))
+    finally:
+        connection.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
 
 
 def validate_direction(direction):
@@ -52,8 +73,7 @@ class Storage:
                 os.close(descriptor)
             connection = sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_MS / 1000)
             connection.row_factory = sqlite3.Row
-            connection.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-            connection.execute("PRAGMA journal_mode=WAL")
+            _enable_wal(connection)
             # Serialize schema inspection and migration across backend processes.
             # Existing rows retain their IDs/timestamps and gain the old default.
             connection.execute("BEGIN IMMEDIATE")
