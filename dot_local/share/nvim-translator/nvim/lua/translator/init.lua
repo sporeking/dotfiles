@@ -2,12 +2,20 @@ local M = {}
 local api = vim.api
 local S = {
   entries = {}, selected_id = nil, config = {}, generation = 0,
-  visible = false, save_generation = 0, loading = false,
+  visible = false, save_generation = 0, loading = false, direction = 'en-zh',
 }
 M.state = S
 
 local function normalize(text)
   return (text:gsub('%s+', ' '):gsub('^ ', ''):gsub(' $', ''))
+end
+
+local function direction(value)
+  return value == 'zh-en' and 'zh-en' or 'en-zh'
+end
+
+local function direction_label(value)
+  return direction(value) == 'zh-en' and 'ZH→EN' or 'EN→ZH'
 end
 
 local function valid_win(win)
@@ -92,7 +100,7 @@ end
 
 local function snapshot()
   return {
-    selected_id = S.selected_id,
+    selected_id = S.selected_id, direction = S.direction,
     draft = table.concat(api.nvim_buf_get_lines(S.input_buf, 0, -1, false), ' '),
     cursor = input_cursor(), result_scroll = result_scroll(),
   }
@@ -146,10 +154,11 @@ local function result_lines(entry)
   if not entry then
     return { '输入单词、短语或句子，然后按 Esc / Ctrl+C 查询。', '',
       'w / b / ciw / u：原生 Vim 编辑', 'k：更早历史    j：更新历史',
+      'Tab：切换 EN→ZH / ZH→EN',
       'Ctrl+D / Ctrl+U：滚动结果    p：发音    :q：隐藏' }
   end
   local result = entry.result or {}
-  local lines = { entry.text or '', '' }
+  local lines = { (entry.text or '') .. '  [' .. direction_label(entry.direction) .. ']', '' }
   local phonetics = result.phonetics or {}
   for _, accent in ipairs({ 'us', 'uk' }) do
     if phonetics[accent] and phonetics[accent] ~= '' then
@@ -219,6 +228,7 @@ function M.history(delta)
   end
   local entry = S.entries[target]
   S.selected_id = entry.id
+  S.direction = direction(entry.direction)
   set_input(entry.text)
   render(entry)
   status('历史 ' .. target .. '/' .. #S.entries)
@@ -273,7 +283,7 @@ function M.submit()
   if text == '' then return end
   invalidate()
   local entry = selected_entry()
-  if entry and normalize(entry.text or '') == text then
+  if entry and normalize(entry.text or '') == text and direction(entry.direction) == S.direction then
     status('已保存的结果')
     queue_save()
     return
@@ -283,7 +293,7 @@ function M.submit()
   S.loading = true
   status('查询中…')
   queue_save()
-  request({ op = 'lookup', text = text, force = false }, function(response, err)
+  request({ op = 'lookup', text = text, direction = S.direction, force = false }, function(response, err)
     if response and type(response.entry) == 'table' and response.entry.id then
       remember_entry(response.entry, response.cached)
     end
@@ -311,7 +321,7 @@ local function im_command()
 end
 
 local function run_im(args)
-  if not S.im_command then return end
+  if S.config.input_method == false or not S.im_command then return end
   local command = { S.im_command }
   vim.list_extend(command, args or {})
   local ok, result = pcall(function() return vim.system(command, { text = true }):wait(1200) end)
@@ -327,13 +337,30 @@ local function capture_im()
   S.previous_im = (value == 1 or value == 2) and value or nil
 end
 
+local function set_edit_im(editing)
+  run_im({ editing and S.direction == 'zh-en' and '-o' or '-c' })
+end
+
+function M.toggle_direction()
+  if not S.initialized then return end
+  invalidate()
+  S.direction = S.direction == 'zh-en' and 'en-zh' or 'zh-en'
+  -- A buffer-local mapping calls this in the existing mode. It never rewrites
+  -- the draft or rendered result, so cursor, undo and result scroll stay intact.
+  set_edit_im(vim.fn.mode(1):sub(1, 1) == 'i')
+  status('Tab 切换方向 · Esc/Ctrl+C 查询 · :q 隐藏')
+  queue_save()
+  return S.direction
+end
+
 function M.on_show()
   if not S.initialized then return 0 end
   if not S.visible then capture_im() end
   S.visible = true
   vim.cmd.stopinsert()
+  set_edit_im(false)
   if valid_win(S.input_win) then api.nvim_set_current_win(S.input_win) end
-  status('k 更早 · j 更新 · Esc/Ctrl+C 查询 · :q 隐藏')
+  status('Tab 方向 · k 更早 · j 更新 · Esc/Ctrl+C 查询 · :q 隐藏')
   return 1
 end
 
@@ -403,7 +430,7 @@ local function make_layout()
   vim.wo[S.result_win].wrap = true
   vim.wo[S.result_win].linebreak = true
   vim.wo[S.result_win].scrolloff = 0
-  vim.wo[S.result_win].statusline = ' Esc/Ctrl+C 查询   k/j 历史   Ctrl+D/U 滚动   p 发音   :q 隐藏'
+  vim.wo[S.result_win].statusline = ' Tab 方向   Esc/Ctrl+C 查询   k/j 历史   Ctrl+D/U 滚动   p 发音   :q 隐藏'
   vim.bo[S.result_buf].modifiable = false
 end
 
@@ -411,7 +438,7 @@ function M.statusline()
   local mode = vim.fn.mode(1):sub(1, 1) == 'i' and 'INSERT' or 'NORMAL'
   local position = tostring(selected_index() or 0) .. '/' .. tostring(#S.entries)
   local message = (S.message or 'Translator'):gsub('%%', '%%%%'):gsub('[\r\n]', ' ')
-  return ' ' .. mode .. '  EN→ZH  ' .. position .. ' │ ' .. message
+  return ' ' .. mode .. '  ' .. direction_label(S.direction) .. '  ' .. position .. ' │ ' .. message
 end
 
 function M.setup()
@@ -439,17 +466,20 @@ function M.setup()
     S.config = response.config or {}
     saved = response.state or {}
   end
+  -- The draft's direction is independent of the last rendered history entry.
+  S.direction = direction(saved.direction)
   S.selected_id = saved.selected_id
   if not selected_entry() then S.selected_id = S.entries[1] and S.entries[1].id or nil end
   local entry = selected_entry()
   set_input(saved.draft ~= nil and saved.draft or (entry and entry.text or ''), saved.cursor or 0)
   render(entry, saved.result_scroll)
   S.initialized = true
-  status(err or 'k 更早 · j 更新 · Esc/Ctrl+C 查询 · :q 隐藏')
+  status(err or 'Tab 方向 · k 更早 · j 更新 · Esc/Ctrl+C 查询 · :q 隐藏')
 
   map('n', 'k', function() M.history(1) end)
   map('n', 'j', function() M.history(-1) end)
   map('n', 'p', function() M.pronounce(false) end)
+  map({ 'n', 'i' }, '<Tab>', M.toggle_direction)
   map({ 'n', 'i' }, '<Esc>', M.submit)
   map({ 'n', 'i' }, '<C-c>', M.submit)
   map({ 'n', 'i' }, '<CR>', M.submit)
@@ -472,9 +502,13 @@ function M.setup()
   })
   api.nvim_create_autocmd('InsertEnter', { group = group, buffer = S.input_buf, callback = function()
     if not S.visible then capture_im(); S.visible = true end
-    if S.config.input_method ~= false then run_im({ '-c' }) end
+    set_edit_im(true)
     -- Editing cancels UI ownership of an in-flight result, even before TextChanged.
     invalidate()
+  end })
+  api.nvim_create_autocmd('InsertLeave', { group = group, buffer = S.input_buf, callback = function()
+    -- Navigation always uses English, even when the next query is ZH→EN.
+    if S.visible then set_edit_im(false) end
   end })
   api.nvim_create_autocmd('WinEnter', { group = group, callback = function()
     if api.nvim_get_current_win() == S.result_win then

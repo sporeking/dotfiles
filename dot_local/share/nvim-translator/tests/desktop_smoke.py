@@ -103,6 +103,24 @@ try:
     assert rpc("vim.api.nvim_get_current_line()") == "take for granted"
     assert rpc("#require('translator').state.entries") == "2"
     print("PASS: real online dictionary, two entries, k/j cached browsing", flush=True)
+    rpc("(function() local s=require('translator').state; vim.api.nvim_win_set_cursor(s.input_win,{1,4}); return 1 end)()")
+    run(["nvim", "--headless", "--server", str(SOCKET), "--remote-send", "<Tab>"])
+    wait_for(lambda: rpc("require('translator').state.direction") == "zh-en", "Normal Tab switches direction")
+    assert rpc("vim.api.nvim_get_current_line()") == "take for granted"
+    assert rpc("vim.api.nvim_win_get_cursor(0)[2]") == "4"
+    assert "ZH→EN" in rpc("require('translator').statusline()")
+    run(["nvim", "--headless", "--server", str(SOCKET), "--remote-send", "i<Tab>"])
+    wait_for(lambda: rpc("require('translator').state.direction") == "en-zh", "Insert Tab switches direction")
+    assert rpc("vim.api.nvim_get_mode().mode").startswith("i")
+    assert rpc("vim.api.nvim_get_current_line()") == "take for granted"
+    assert rpc("vim.api.nvim_win_get_cursor(0)[2]") == "4"
+    # Same text as a cached EN→ZH entry must request the other direction. The
+    # isolated config has no model/key, so this produces a local error, no LLM call.
+    run(["nvim", "--headless", "--server", str(SOCKET), "--remote-send", "<Tab><C-c>"])
+    wait_for(lambda: "LLM" in rpc("require('translator').state.message"), "reverse direction requires configured LLM")
+    assert rpc("require('translator').state.direction") == "zh-en"
+    assert rpc("#require('translator').state.entries") == "2"
+    print("PASS: Normal/Insert Tab, preserved draft/cursor/mode, reverse cache isolation", flush=True)
     rpc("(function() local s=require('translator').state; vim.api.nvim_buf_set_lines(s.input_buf,0,-1,false,{'unsubmitted draft'}); vim.api.nvim_win_set_cursor(s.input_win,{1,4}); return 1 end)()")
     run(["nvim", "--headless", "--server", str(SOCKET), "--remote-send", "<C-\\><C-N>:q<CR>"])
     wait_for(lambda: not json.loads(ctl("status"))["visible"], ":q hides workspace")
@@ -111,6 +129,7 @@ try:
     assert not json.loads(ctl("status"))["visible"]
     ctl("show")
     assert rpc("vim.api.nvim_get_current_line()") == "unsubmitted draft"
+    assert rpc("require('translator').state.direction") == "zh-en"
     assert rpc("vim.api.nvim_win_get_cursor(0)[2]") == "4"
     assert rpc("vim.api.nvim_get_mode().mode") == "n"
     print("PASS: :q hides without quitting, idempotent hide, same draft and cursor", flush=True)
@@ -118,6 +137,7 @@ try:
     assert not translator_windows(), "stop must finish before immediate restart"
     ctl("start")
     assert rpc("vim.api.nvim_get_current_line()") == "unsubmitted draft"
+    assert rpc("require('translator').state.direction") == "zh-en"
     assert rpc("#require('translator').state.entries") == "2"
     print("PASS: process restart restores database history and draft", flush=True)
     current = {c["address"]: c for c in windows()}

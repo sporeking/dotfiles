@@ -31,17 +31,21 @@ root = pathlib.Path(__file__).parent
 request = json.load(sys.stdin)
 with (root / 'requests.jsonl').open('a') as stream:
     stream.write(json.dumps(request) + '\n')
-def entry(number, text):
-    return {'id': number, 'text': text, 'created_at': '2026-01-%02d' % number,
+def entry(number, text, direction='en-zh'):
+    record = {'id': number, 'text': text, 'created_at': '2026-01-%02d' % number,
+              'direction': direction,
             'result': {'kind': 'dictionary', 'source': 'test',
                        'phonetics': {'us': 'test'}, 'audio': {'us': 'https://audio.test/' + text},
                        'meanings': [{'pos': 'n.', 'definitions': ['meaning']}],
                        'examples': [{'en': 'Example ' + str(i), 'zh': '例句', 'source': 'dictionary'} for i in range(40)]}}
+    if number == 2:  # Legacy history records did not carry a direction.
+        record.pop('direction')
+    return record
 op = request['op']
 if op == 'load':
     state_file = root / 'state.json'
     state = json.loads(state_file.read_text()) if state_file.exists() else {'selected_id': 2, 'draft': 'draft word', 'cursor': 3, 'result_scroll': 4}
-    response = {'ok': True, 'entries': [entry(3, 'newest'), entry(2, 'middle'), entry(1, 'oldest')],
+    response = {'ok': True, 'entries': [entry(3, 'newest', 'zh-en'), entry(2, 'middle'), entry(1, 'oldest')],
                 'state': state, 'config': {'auto_pronounce': True, 'accent': 'us', 'input_method': True}}
 elif op == 'save_state':
     if (root / 'fail-save').exists():
@@ -50,7 +54,9 @@ elif op == 'save_state':
     response = {'ok': True}
 elif op == 'lookup':
     text = request['text']
-    time.sleep(0.35 if text in ('slow', 'hidden') else 0.04)
+    direction = request['direction']
+    assert direction in ('en-zh', 'zh-en')
+    time.sleep(0.35 if text in ('slow', 'hidden', 'direction slow') else 0.04)
     if text == 'error':
         response = {'ok': False, 'error': 'expected lookup error'}
     elif text == 'exiterror':
@@ -58,8 +64,10 @@ elif op == 'lookup':
     elif text == 'invalid':
         print('not json'); sys.exit(0)
     else:
-        number = 4 if text in ('slow', 'hidden') else 5
-        response = {'ok': True, 'entry': entry(number, text), 'cached': text == 'cached'}
+        number = 6 if text == 'direction slow' else (4 if text in ('slow', 'hidden') else 5)
+        if direction == 'zh-en':
+            number += 10
+        response = {'ok': True, 'entry': entry(number, text, direction), 'cached': text == 'cached'}
 print(json.dumps(response))
 ]=])
 write('fcitx5-remote', [=[#!/usr/bin/env python3
@@ -127,6 +135,8 @@ local ok, failure = xpcall(function()
   equal(line(), 'draft word', 'restore unsubmitted draft')
   equal(api.nvim_win_get_cursor(s.input_win)[2], 3, 'restore byte cursor')
   equal(s.selected_id, 2, 'restore selected history id')
+  equal(s.direction, 'en-zh', 'legacy state defaults to English-to-Chinese')
+  check(result():find('[EN→ZH]', 1, true), 'legacy result direction defaults to English-to-Chinese')
   equal(api.nvim_win_call(s.result_win, function() return vim.fn.winsaveview().topline end), 4, 'restore scroll')
   equal(#requests('lookup'), 0, 'startup does not lookup')
   equal(read('audio.log'), '', 'startup does not pronounce')
@@ -134,12 +144,59 @@ local ok, failure = xpcall(function()
   ui.on_show()
   local bar = api.nvim_eval_statusline(vim.wo[s.input_win].statusline, { winid = s.input_win }).str
   check(bar:find('NORMAL', 1, true) and bar:find('EN→ZH', 1, true) and bar:find('2/3', 1, true), 'statusline gives mode, direction and position')
+  equal(read('im-state'), '1', 'show forces Normal-mode English after capturing Chinese state')
+  local before_tab = { draft = line(), cursor = api.nvim_win_get_cursor(s.input_win), result = result(), scroll = api.nvim_win_call(s.result_win, function() return vim.fn.winsaveview().topline end) }
+  keys('<Tab>')
+  equal(s.direction, 'zh-en', 'real Normal Tab switches to Chinese-to-English')
+  equal(vim.fn.mode(), 'n', 'Normal Tab retains Normal mode')
+  equal(line(), before_tab.draft, 'Normal Tab preserves draft without inserting tab')
+  equal(api.nvim_win_get_cursor(s.input_win), before_tab.cursor, 'Normal Tab preserves cursor')
+  equal(result(), before_tab.result, 'Normal Tab leaves rendered result unchanged')
+  equal(api.nvim_win_call(s.result_win, function() return vim.fn.winsaveview().topline end), before_tab.scroll, 'Normal Tab preserves results scroll')
+  check(ui.statusline():find('ZH→EN', 1, true), 'statusline reflects current direction')
+  check(result():find('[EN→ZH]', 1, true), 'result retains its own previous direction')
+  equal(read('im-state'), '1', 'Chinese direction in Normal keeps English IM for navigation')
+  keys('<Tab>')
+  equal(s.direction, 'en-zh', 'Normal Tab toggles back')
+
+  -- Observe mode/cursor inside the actual Insert key stream. feedkeys("x")
+  -- otherwise exits Insert on an empty queue and could mask an accidental exit.
+  local insert_samples = {}
+  vim.keymap.set('i', '<F12>', function()
+    insert_samples[#insert_samples + 1] = {
+      direction = s.direction, mode = vim.fn.mode(), draft = line(),
+      cursor = api.nvim_win_get_cursor(s.input_win), result = result(), im = read('im-state'),
+    }
+  end, { buffer = s.input_buf })
+  keys('i<F12><Tab><F12><Tab><F12><Tab><C-\\><C-n>')
+  equal(s.direction, 'zh-en', 'leaving Insert preserves query direction')
+  equal(read('im-state'), '1', 'InsertLeave switches back to English for hjkl')
+  api.nvim_win_set_cursor(s.input_win, before_tab.cursor)
+  keys('i<F12><C-\\><C-n>')
+  equal(read('im-state'), '1', 'leaving Chinese Insert returns to English')
+  keys('<Tab>')
+  vim.keymap.del('i', '<F12>', { buffer = s.input_buf })
+  equal(#insert_samples, 4, 'Insert key stream remains active through Tabs and re-entry')
+  for i, sample in ipairs(insert_samples) do
+    equal(sample.mode, 'i', 'Tab preserves actual Insert mode ' .. i)
+    equal(sample.draft, before_tab.draft, 'Insert Tab preserves draft ' .. i)
+    equal(sample.cursor, before_tab.cursor, 'Insert Tab preserves cursor ' .. i)
+    equal(sample.result, before_tab.result, 'Insert Tab preserves rendered result ' .. i)
+  end
+  equal(insert_samples[2].direction, 'zh-en', 'real Insert Tab switches direction')
+  equal(insert_samples[2].im, '2', 'Insert Tab activates Chinese IM')
+  equal(insert_samples[3].direction, 'en-zh', 'second Insert Tab switches back')
+  equal(insert_samples[3].im, '1', 'Insert Tab deactivates Chinese IM for English')
+  equal(insert_samples[4].direction, 'zh-en', 'Chinese direction survives Insert re-entry')
+  equal(insert_samples[4].im, '2', 'InsertEnter activates Chinese IM in Chinese direction')
+  equal(#requests('lookup'), 0, 'Tab in either mode never requests translation: ' .. vim.inspect(requests('lookup')))
+  equal(read('audio.log'), '', 'Tab never pronounces')
   keys('0w')
   equal(api.nvim_win_get_cursor(s.input_win)[2], 6, 'native w')
   keys('b')
   equal(api.nvim_win_get_cursor(s.input_win)[2], 0, 'native b')
   -- Ctrl+[ leaves insert mode natively, allowing a pure undo test without lookup.
-  keys('ciwchanged<C-[>')
+  keys('ciwchanged<C-\\><C-n>')
   equal(line(), 'changed word', 'native ciw')
   keys('u')
   equal(line(), 'draft word', 'native undo')
@@ -149,7 +206,11 @@ local ok, failure = xpcall(function()
   keys('k')
   equal(s.selected_id, 1, 'k selects earlier history')
   equal(line(), 'oldest', 'history replaces draft')
-  keys('jjk')
+  keys('jj')
+  equal(s.direction, 'zh-en', 'newer history restores Chinese-to-English direction')
+  check(result():find('[ZH→EN]', 1, true), 'Chinese history result labels its own direction')
+  keys('k')
+  equal(s.direction, 'en-zh', 'legacy history restores default English-to-Chinese direction')
   equal(s.selected_id, 2, 'rapid history follows latest key')
   equal(line(), 'middle', 'rapid history input stays consistent')
   equal(#requests('lookup'), 0, 'history never queries')
@@ -165,11 +226,14 @@ local ok, failure = xpcall(function()
   draft(' 中abc  ')
   api.nvim_win_set_cursor(s.input_win, { 1, 4 })
   ui.scroll(1)
+  keys('<Tab>')
   ui.save_state()
+  equal(vim.json.decode(read('state.json')).direction, 'zh-en', 'save current draft direction independently of selected entry')
   local restore = vim.system({ vim.v.progpath, '--headless', '-u', root .. '/nvim/init.lua',
-    '-c', 'lua local s=require("translator").state; assert(s.selected_id==2); assert(vim.api.nvim_buf_get_lines(s.input_buf,0,1,false)[1]==" 中abc  "); assert(vim.api.nvim_win_get_cursor(s.input_win)[2]==4); assert(vim.api.nvim_win_call(s.result_win,function() return vim.fn.winsaveview().topline end)>1)',
+    '-c', 'lua local s=require("translator").state; assert(s.selected_id==2); assert(s.direction=="zh-en"); assert((s.entries[2].direction or "en-zh")=="en-zh"); assert(vim.api.nvim_buf_get_lines(s.input_buf,0,1,false)[1]==" 中abc  "); assert(vim.api.nvim_win_get_cursor(s.input_win)[2]==4); assert(vim.api.nvim_win_call(s.result_win,function() return vim.fn.winsaveview().topline end)>1)',
     '-c', 'qa!' }, { text = true }):wait(5000)
-  equal(restore.code, 0, 'separate process restores draft, UTF-8 byte cursor, id and scroll: ' .. (restore.stderr or ''))
+  equal(restore.code, 0, 'separate process restores direction, draft, UTF-8 byte cursor, id and scroll: ' .. (restore.stderr or ''))
+  keys('<Tab>')
 
   -- Both paste API and ordinary multiline puts collapse to a single line.
   api.nvim_paste('paste\nsecond\r\nthird', false, -1)
@@ -243,6 +307,54 @@ local ok, failure = xpcall(function()
   keys('A!<C-c>')
   await(function() return not s.loading and requests('lookup')[#requests('lookup')].text == 'submit control!' end, 'Ctrl+C submits input')
 
+  -- Identical text in the other direction must not reuse the selected result.
+  local direction_query = line()
+  local count_before_direction = #requests('lookup')
+  local audio_before_reverse = read('audio.log')
+  keys('<Tab>')
+  equal(s.direction, 'zh-en', 'switch direction before submitting same text')
+  ui.submit()
+  await(function() return not s.loading and #requests('lookup') > count_before_direction end, 'reverse-direction lookup completes')
+  local reverse_request = requests('lookup')[#requests('lookup')]
+  equal(reverse_request.text, direction_query, 'reverse lookup keeps original text')
+  equal(reverse_request.direction, 'zh-en', 'lookup sends explicit reverse direction')
+  equal(s.selected_id, 15, 'opposite direction gets a distinct result')
+  check(result():find('[ZH→EN]', 1, true), 'reverse result labels its own direction')
+  await(function() return read('audio.log') ~= audio_before_reverse end, 'new reverse result pronunciation completes')
+  local audio_before_forward = read('audio.log')
+  local reverse_count = #requests('lookup')
+  ui.submit()
+  equal(#requests('lookup'), reverse_count, 'same text and direction reuse selected result')
+  keys('<Tab>')
+  check(result():find('[ZH→EN]', 1, true), 'toggle leaves reverse result labeled while current direction changes')
+  ui.submit()
+  await(function() return not s.loading and #requests('lookup') > reverse_count end, 'forward direction cannot reuse reverse cache')
+  equal(requests('lookup')[#requests('lookup')].direction, 'en-zh', 'lookup sends explicit forward direction')
+  check(result():find('[EN→ZH]', 1, true), 'forward result labels its own direction')
+  await(function() return read('audio.log') ~= audio_before_forward end, 'new forward result pronunciation completes')
+
+  keys('<Tab>')
+  draft('direction slow')
+  ui.submit()
+  check(s.loading, 'reverse slow query is asynchronous')
+  local before_direction_response = { selected = s.selected_id, result = result(), audio = read('audio.log') }
+  keys('<Tab>')
+  equal(s.direction, 'en-zh', 'direction switches while lookup runs')
+  await(function()
+    for _, entry in ipairs(s.entries) do
+      if entry.id == 16 then return true end
+    end
+    return false
+  end, 'old-direction response eventually completes')
+  equal(s.selected_id, before_direction_response.selected, 'stale opposite direction cannot select a result')
+  equal(result(), before_direction_response.result, 'stale opposite direction cannot overwrite rendered result')
+  equal(line(), 'direction slow', 'stale opposite direction preserves draft')
+  equal(s.direction, 'en-zh', 'stale opposite direction cannot change current direction')
+  equal(read('audio.log'), before_direction_response.audio, 'stale opposite direction never pronounces')
+  for _, lookup in ipairs(requests('lookup')) do
+    check(lookup.direction == 'en-zh' or lookup.direction == 'zh-en', 'every lookup declares its direction')
+  end
+
   draft('hidden')
   ui.submit()
   draft('persist this draft')
@@ -266,6 +378,7 @@ local ok, failure = xpcall(function()
   equal(saved.cursor, 4, 'persist cursor byte column')
   equal(saved.selected_id, selected, 'persist selected id independently from draft')
   equal(saved.result_scroll, scroll, 'persist results scroll')
+  equal(saved.direction, s.direction, 'persist current draft direction')
   audio = read('audio.log')
   vim.wait(450, function() return false end, 20)
   equal(read('audio.log'), audio, 'hidden pending query never pronounces')
@@ -277,6 +390,13 @@ local ok, failure = xpcall(function()
   ui.on_show()
   ui.before_hide()
   equal(read('im-state'), '1', 'show recaptures English state')
+  local no_im_log = read('im.log')
+  s.config.input_method = false
+  ui.on_show()
+  keys('<Tab>i<Tab><C-\\><C-n>')
+  ui.before_hide()
+  equal(read('im.log'), no_im_log, 'input_method=false disables all show/Tab/Insert/hide IM calls')
+  s.config.input_method = true
   ui.on_show()
   keys(':q<CR>')
   await(function() return read('launcher.log') == 'hide' end, ':q invokes hide')

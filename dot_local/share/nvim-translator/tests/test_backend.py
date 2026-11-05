@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,7 @@ from translator_backend.app import handle_request
 from translator_backend.config import Config, ROOTS, database_path, load_config
 from translator_backend.dictionary import clearly_sentence, lookup_dictionary, parse_dictionary
 from translator_backend.errors import BackendError
+from translator_backend.llm import translate
 from translator_backend.storage import DEFAULT_STATE, Storage
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,21 +52,21 @@ def lexical(query, *, headword=None):
     }
 
 
-def provider_response(path):
+def provider_response(path, content=TRANSLATION):
     if path == "/api/chat/completions":
-        return {"choices": [{"finish_reason": "stop", "message": {"content": TRANSLATION}}]}
+        return {"choices": [{"finish_reason": "stop", "message": {"content": content}}]}
     if path == "/api/responses":
         return {"status": "completed", "output": [
             {"type": "reasoning", "summary": []},
-            {"type": "message", "content": [{"type": "output_text", "text": TRANSLATION}]},
+            {"type": "message", "content": [{"type": "output_text", "text": content}]},
         ]}
     if path == "/api/messages":
         return {"stop_reason": "end_turn", "content": [
             {"type": "thinking", "thinking": "not translation"},
-            {"type": "text", "text": TRANSLATION},
+            {"type": "text", "text": content},
         ]}
     if path == "/api/models/test-model:generateContent":
-        return {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": TRANSLATION}]}}]}
+        return {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": content}]}}]}
     return {"error": {"message": "unexpected endpoint"}}
 
 
@@ -154,6 +156,7 @@ class BackendTests(unittest.TestCase):
         response = self.call({"op": "lookup", "text": " \t hello\n "})
         entry = response["entry"]
         self.assertEqual(entry["text"], "hello")
+        self.assertEqual(entry["direction"], "en-zh")
         result = entry["result"]
         self.assertEqual(result["kind"], "dictionary")
         self.assertEqual(result["meanings"], [
@@ -274,7 +277,7 @@ class BackendTests(unittest.TestCase):
         self.assertNotIn(FAKE_KEY, str(error.exception))
         entries, restored = self.store.load()
         self.assertEqual(entries, [successful])
-        self.assertEqual(restored, state)
+        self.assertEqual(restored, {**state, "direction": "en-zh"})
         self.assertEqual(len(self.server.requests), 2)
 
     def test_malformed_dictionary_response_is_failure_not_lexical_miss(self):
@@ -362,7 +365,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(len(entries), 130)
         self.assertEqual(entries[0]["id"], 130)
         self.assertEqual(entries[-1]["text"], "query-0")
-        self.assertEqual(restored, state)
+        self.assertEqual(restored, {**state, "direction": "en-zh"})
         self.assertNotEqual(entries[-4]["text"], restored["draft"])
         self.assertEqual(self.store.path.stat().st_mode & 0o777, 0o600)
 
@@ -402,6 +405,174 @@ class BackendTests(unittest.TestCase):
                 self.call(request)
         self.assertEqual(self.store.load(), ([], DEFAULT_STATE))
         self.assertEqual(self.server.requests, [])
+
+    def test_zh_en_four_protocols_translate_chinese_and_keep_proper_names(self):
+        text = "明天在星星咖啡馆和王小明见面。"
+        english = "Let's meet 王小明 at Café Étoile tomorrow."
+        content = json.dumps({"translation": english, "examples": [
+            {"en": "See you tomorrow.", "zh": "明天见。"},
+        ]}, ensure_ascii=False)
+        self.server.responder = lambda req: (200, provider_response(urlsplit(req["path"]).path, content), {})
+        for protocol in ROOTS:
+            with self.subTest(protocol=protocol):
+                response = self.call({"op": "lookup", "text": text, "direction": "zh-en", "force": True},
+                                     replace(self.config, protocol=protocol))
+                self.assertEqual(response["entry"]["direction"], "zh-en")
+                result = response["entry"]["result"]
+                self.assertEqual(result["translation"], english)
+                self.assertEqual(result["kind"], "translation")
+                self.assertEqual(result["audio"], {})
+                self.assertEqual(result["examples"], [{"en": "See you tomorrow.", "zh": "明天见。", "source": "generated"}])
+                request = self.server.requests[-1]
+                self.assertEqual(request["method"], "POST")
+                body = request["body"]
+                if protocol == "openai":
+                    prompt = body["messages"][0]["content"]
+                    supplied_text = body["messages"][1]["content"]
+                elif protocol == "openai-responses":
+                    prompt, supplied_text = body["instructions"], body["input"]
+                elif protocol == "anthropic":
+                    prompt, supplied_text = body["system"], body["messages"][0]["content"]
+                else:
+                    prompt = body["systemInstruction"]["parts"][0]["text"]
+                    supplied_text = body["contents"][0]["parts"][0]["text"]
+                self.assertIn("Chinese-to-English", prompt)
+                self.assertIn("into English", prompt)
+                self.assertEqual(supplied_text, text)
+        self.assertEqual(len(self.server.requests), 4)  # Never consult Youdao for zh-en.
+
+    def test_same_text_has_independent_direction_cache_and_refresh(self):
+        first = self.call({"op": "lookup", "text": "hello"})["entry"]
+        self.assertEqual(first["direction"], "en-zh")
+        self.server.responder = lambda req: (200, provider_response(urlsplit(req["path"]).path, "Hello."), {})
+        second = self.call({"op": "lookup", "text": "hello", "direction": "zh-en"})["entry"]
+        self.assertNotEqual(second["id"], first["id"])
+        self.assertEqual(second["direction"], "zh-en")
+        self.assertEqual(second["result"]["translation"], "Hello.")
+        for direction, expected in (("en-zh", first), ("zh-en", second)):
+            cached = self.call({"op": "lookup", "text": " hello ", "direction": direction},
+                               replace(self.config, api_key="", model=""))
+            self.assertTrue(cached["cached"])
+            self.assertEqual(cached["entry"], expected)
+        self.assertEqual(len(self.server.requests), 2)
+        refreshed = self.call({"op": "lookup", "text": "hello", "direction": "zh-en", "force": True})["entry"]
+        self.assertGreater(refreshed["id"], second["id"])
+        self.assertEqual(self.store.cached("hello"), first)  # Old internal default remains en-zh.
+        self.assertEqual(self.store.cached("hello", "zh-en"), refreshed)
+        self.assertEqual(self.store.load()[0], [refreshed, second, first])
+        self.assertEqual(len(self.server.requests), 3)
+
+    def test_zh_en_unconfigured_provider_makes_no_network_requests(self):
+        for config in (replace(self.config, model=""), replace(self.config, api_key="")):
+            with self.assertRaisesRegex(BackendError, "尚未发送 LLM 请求"):
+                self.call({"op": "lookup", "text": "你好", "direction": "zh-en"}, config)
+        self.assertEqual(self.server.requests, [])
+        self.assertEqual(self.store.load()[0], [])
+
+    def test_zh_en_plain_and_json_outputs_require_latin_but_allow_chinese_names(self):
+        config = replace(self.config, ui={**self.config.ui, "examples": False})
+        for english in ("Good morning.", "Meet 王小明 at Café Étoile."):
+            for content in (english, "```json\n" + json.dumps({"translation": english, "examples": [
+                {"en": "Good morning.", "zh": "早上好。"},
+            ]}, ensure_ascii=False) + "\n```"):
+                self.server.responder = lambda req, value=content: (200, provider_response(urlsplit(req["path"]).path, value), {})
+                entry = self.call({"op": "lookup", "text": "早上好", "direction": "zh-en", "force": True}, config)["entry"]
+                self.assertEqual(entry["result"]["translation"], english)
+                self.assertEqual(entry["result"]["examples"], [])
+        before = self.store.load()[0]
+        for content in ("只有中文，没有英文。", '{"translation":"只有中文"}', "12345", '{"translation":"unfinished'):
+            self.server.responder = lambda req, value=content: (200, provider_response(urlsplit(req["path"]).path, value), {})
+            with self.assertRaises(BackendError):
+                self.call({"op": "lookup", "text": "早上好", "direction": "zh-en", "force": True})
+        self.assertEqual(self.store.load()[0], before)
+
+    def test_invalid_directions_rejected_before_network_or_database_access(self):
+        for direction in (None, False, 1, [], {}, "auto", FAKE_KEY):
+            with self.subTest(direction=direction):
+                with self.assertRaisesRegex(BackendError, "direction") as error:
+                    self.call({"op": "lookup", "text": "hello", "direction": direction})
+                self.assertNotIn(FAKE_KEY, str(error.exception))
+                with self.assertRaisesRegex(BackendError, "direction"):
+                    self.call({"op": "save_state", "state": {**DEFAULT_STATE, "direction": direction}})
+        self.assertFalse(self.store.path.exists())
+        self.assertEqual(self.server.requests, [])
+        with self.assertRaisesRegex(BackendError, "direction"):
+            self.store.cached("hello", direction="auto")
+        with self.assertRaisesRegex(BackendError, "direction"):
+            self.store.save_success("hello", {}, direction="auto")
+        with self.assertRaisesRegex(BackendError, "direction"):
+            translate("hello", self.config, direction="auto")
+        self.assertFalse(self.store.path.exists())
+        self.assertEqual(self.server.requests, [])
+
+    def _make_legacy_database(self):
+        entry = {"id": 7, "text": "hello", "created_at": "2024-01-02T03:04:05+00:00",
+                 "result": parse_dictionary(lexical("hello"), "hello")}
+        state = {"selected_id": 7, "draft": "未提交修改 edited draft", "cursor": 6, "result_scroll": 5}
+        connection = sqlite3.connect(self.store.path)
+        try:
+            connection.execute("CREATE TABLE entries (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, created_at TEXT NOT NULL, result_json TEXT NOT NULL)")
+            connection.execute("CREATE INDEX entries_text ON entries(text, id DESC)")
+            connection.execute("CREATE TABLE app_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), state_json TEXT NOT NULL)")
+            connection.execute("INSERT INTO entries VALUES(?,?,?,?)", (entry["id"], entry["text"], entry["created_at"], json.dumps(entry["result"], ensure_ascii=False)))
+            connection.execute("INSERT INTO app_state VALUES(1,?)", (json.dumps(state, ensure_ascii=False),))
+            connection.commit()
+        finally:
+            connection.close()
+        return entry, state
+
+    def test_legacy_database_preserves_ids_timestamps_results_and_drafts(self):
+        legacy, old_state = self._make_legacy_database()
+        expected = {**legacy, "direction": "en-zh"}
+        entries, state = self.store.load()
+        self.assertEqual(entries, [expected])
+        self.assertEqual(state, {**old_state, "direction": "en-zh"})
+        self.assertEqual(self.store.cached("hello"), expected)
+        self.assertIsNone(self.store.cached("hello", "zh-en"))
+        newer, cached = self.store.save_success("hello", {"kind": "translation", "translation": "Hello."}, direction="zh-en")
+        self.assertFalse(cached)
+        self.assertEqual(newer["id"], 8)
+        self.assertEqual(self.store.cached("hello"), expected)
+        self.assertEqual(self.store.cached("hello", "zh-en"), newer)
+        self.assertEqual(self.store.load()[1], {**old_state, "direction": "en-zh"})
+
+    def test_multiple_backend_processes_can_migrate_same_legacy_database(self):
+        legacy, old_state = self._make_legacy_database()
+        path = self.root / "migration.toml"
+        path.write_text("")
+        environment = dict(os.environ, TRANSLATOR_CONFIG=str(path), TRANSLATOR_DB=str(self.store.path), TRANSLATOR_API_KEY="")
+        barrier = threading.Barrier(8)
+        def load_in_process(index):
+            barrier.wait(timeout=5)
+            process = subprocess.run([sys.executable, "-m", "translator_backend"], input='{"op":"load"}\n',
+                                     text=True, capture_output=True, env=environment, cwd=ROOT, timeout=20)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            self.assertEqual(process.stderr, "")
+            response = json.loads(process.stdout)
+            self.assertTrue(response["ok"], response)
+            return response
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            responses = list(pool.map(load_in_process, range(8)))
+        for response in responses:
+            self.assertEqual(response["entries"], [{**legacy, "direction": "en-zh"}])
+            self.assertEqual(response["state"], {**old_state, "direction": "en-zh"})
+        self.assertEqual(self.server.requests, [])
+
+    def test_zh_en_direction_and_unsubmitted_draft_survive_separate_cli_processes(self):
+        content = json.dumps({"translation": "Good morning.", "examples": []})
+        self.server.responder = lambda req: (200, provider_response(urlsplit(req["path"]).path, content), {})
+        config = '[llm]\nmodel="test-model"\nbase_url="' + self.base + '/api"\n'
+        response, output = self.cli({"op": "lookup", "text": "早上好", "direction": "zh-en"}, config)
+        self.assertTrue(response["ok"])
+        entry = response["entry"]
+        self.assertEqual(entry["direction"], "zh-en")
+        state = {"selected_id": entry["id"], "draft": "尚未提交的新草稿", "cursor": 9, "result_scroll": 2, "direction": "zh-en"}
+        self.assertTrue(self.cli({"op": "save_state", "state": state}, config)[0]["ok"])
+        loaded, output = self.cli({"op": "load"})
+        self.assertEqual(loaded["state"], state)
+        self.assertEqual(loaded["entries"], [entry])
+        self.assertNotIn(FAKE_KEY, output)
+        self.assertEqual(len(self.server.requests), 1)
 
     def test_config_environment_precedence_and_private_public_separation(self):
         path = self.root / "config.toml"
@@ -511,14 +682,14 @@ class BackendTests(unittest.TestCase):
     def test_cli_separate_process_draft_restore_and_successful_lookup(self):
         state = {"selected_id": None, "draft": "未提交 draft", "cursor": 9, "result_scroll": 3}
         self.assertTrue(self.cli({"op": "save_state", "state": state})[0]["ok"])
-        self.assertEqual(self.cli({"op": "load"})[0]["state"], state)
+        self.assertEqual(self.cli({"op": "load"})[0]["state"], {**state, "direction": "en-zh"})
         config = '[llm]\nmodel="test-model"\nbase_url="' + self.base + '/api"\n[dictionary]\nenabled=false\n'
         response, output = self.cli({"op": "lookup", "text": "The cat sits."}, config)
         self.assertTrue(response["ok"])
         self.assertNotIn(FAKE_KEY, output)
         loaded, output = self.cli({"op": "load"}, config)
         self.assertEqual(loaded["entries"], [response["entry"]])
-        self.assertEqual(loaded["state"], state)
+        self.assertEqual(loaded["state"], {**state, "direction": "en-zh"})
         self.assertNotIn(FAKE_KEY, output)
 
 
