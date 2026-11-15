@@ -1,0 +1,4 @@
+# Independent local fork; disable the upstream bundle before activating.
+- insert:
+    - id: ssh-research
+      name: '@sporeking/dsh-ssh-research'

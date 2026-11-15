@@ -1,6 +1,10 @@
 # Repository guidance is for this checkout, not the user's home directory.
 AGENTS.md
 
+# DSH plugin sources stay in this repository; install through DSH explicitly.
+dsh-plugins
+dsh-plugins/**
+
 # Translator machine-local state and credentials are never managed.
 .config/nvim-translator/config.local.toml
 .local/share/nvim-translator/history.sqlite3*

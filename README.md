@@ -216,6 +216,7 @@ chezmoi re-add PATH          # 用目标文件覆盖源文件（同步“本机�
 
 | 组件 | 目的 | 使用方法 | 实现方式 |
 | --- | --- | --- | --- |
+| DSH 插件 | [自维护插件目录](dsh-plugins/README.md#目的) | [安装与更新](dsh-plugins/README.md#使用方法) | [目录与维护约定](dsh-plugins/README.md#实现方式与维护) |
 | 悬浮翻译器 | [读写英文时查词、双向翻译](dot_local/share/nvim-translator/README.md#目的) | [安装、配置与 Vim 按键](dot_local/share/nvim-translator/README.md#使用方法) | [调用流程与源码分工](dot_local/share/nvim-translator/README.md#实现方式) |
 | 悬浮 Pi | [多轮文件与命令助手](dot_local/share/nvim-quick-ask/README.md#目的) | [Alt+A、Vim 浏览与原生会话](dot_local/share/nvim-quick-ask/README.md#使用方法) | [原生 Pi、专用终端与轻量键位扩展](dot_local/share/nvim-quick-ask/README.md#实现方式) |
 

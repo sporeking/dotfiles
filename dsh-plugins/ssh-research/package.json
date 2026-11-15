@@ -1,0 +1,72 @@
+{
+  "name": "@sporeking/dsh-ssh-research",
+  "version": "0.1.2",
+  "private": true,
+  "description": "Remote SSH terminal, file transfer and research result previews using DSH owner authentication.",
+  "icon": "icon.svg",
+  "type": "module",
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.2"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ],
+      "platform": "web"
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "ssh2": "^1.17.0",
+    "ws": "^8.18.0",
+    "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
+    "@types/ssh2": "^1.15.5",
+    "@types/ws": "^8.5.13",
+    "esbuild": "0.28.2",
+    "jsdom": "^25.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && vitest run"
+  },
+  "files": [
+    "lib",
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY-LICENSES.txt",
+    "icon.svg",
+    "locale"
+  ],
+  "license": "Apache-2.0"
+}

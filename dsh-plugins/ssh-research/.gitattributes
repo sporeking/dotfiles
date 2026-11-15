@@ -1,0 +1,2 @@
+# Bundled third-party output preserves upstream formatting.
+lib/** -whitespace
