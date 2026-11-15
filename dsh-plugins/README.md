@@ -5,6 +5,7 @@
 把我们自己的 DSH 插件放在一起，方便备份、换机器和继续开发。
 
 - [SSH 科研工作台](ssh-research/README.md)：连接服务器、传文件、查看文本、图片和 CSV。
+- [SwanLab 实验面板](swanlab/README.md)：在右侧栏查看实验曲线、配置、日志和报告。
 
 ## 使用方法
 

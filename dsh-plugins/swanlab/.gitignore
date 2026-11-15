@@ -1,0 +1,10 @@
+node_modules/
+*.tgz
+__pycache__/
+*.pyc
+artifacts/
+.env
+*.env
+*.log
+credentials*
+pack-files.json

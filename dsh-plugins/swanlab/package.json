@@ -1,0 +1,13 @@
+{
+  "name": "dsh-swanlab",
+  "version": "0.1.1",
+  "description": "本地 SwanLab 实验侧边栏：运行、曲线、配置和日志",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": { ".": "./src/index.js", "./client": "./client/index.js", "./package.json": "./package.json", "./cordis.patch.yml": "./cordis.patch.yml" },
+  "files": ["src/index.js", "src/query.py", "src/API.md", "client/index.js", "cordis.patch.yml", "README.md", "LICENSE"],
+  "scripts": { "test": "node --test tests/*.test.mjs && python3 -B tests/backend_python.py", "check": "node --check src/index.js && node --check client/index.js" },
+  "engines": { "node": ">=24.9.0", "dsh": ">=0.2.2-rc.1 <0.3.0-0" },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-client-ui-renderer"] } },
+  "license": "MIT"
+}
